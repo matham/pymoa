@@ -1,0 +1,26 @@
+#:kivy 1.8.1
+#:import Factory kivy.factory.Factory
+
+<StageDisplay@StageTreeNode+StageSimpleDisplay>
+
+
+<RootStage>:
+    name: 'Root stage'
+    on_parent: self.add_display(Factory.get('StageDisplay')(stage=self))
+    completion_list: self.stages
+    Delay:
+        name: '1st stage'
+        on_parent: self.add_display(Factory.get('StageDisplay')(stage=self))
+        value: .5 * self.count + .5
+        repeat: 10
+        completion_type: 'any'
+        Delay:
+            name: 'Inner stage'
+            on_parent: self.add_display(Factory.get('StageDisplay')(stage=self))
+            value: 0.025 * self.count + 0.125
+            repeat: 20
+    Delay:
+        name: '2nd stage'
+        on_parent: self.add_display(Factory.get('StageDisplay')(stage=self))
+        value: 0.025 * self.count + 0.125
+        repeat: 10
