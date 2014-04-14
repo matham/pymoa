@@ -4,15 +4,13 @@
 __all__ = ('MoaStage', 'StageRender')
 
 import time
-from functools import partial
-from collections import deque
 from kivy.clock import Clock
 from kivy.properties import (BooleanProperty, NumericProperty, StringProperty,
     OptionProperty, BoundedNumericProperty, ReferenceListProperty,
     ObjectProperty, ListProperty)
-from kivy.compat import string_types
+from kivy.uix.widget import Widget
 from kivy.logger import Logger as logging
-from moa.bases import MoaBase
+from moa.base import MoaBase
 from moa.threading import CallbackDeque
 
 
@@ -27,7 +25,7 @@ class StageRender(object):
         pass
 
 
-class MoaStage(MoaBase):
+class MoaStage(Widget, MoaBase):
 
     __events__ = ('on_start', 'on_stop', )
     ''' stop is dispatched when the children and itself needs to stop.
@@ -148,7 +146,7 @@ class MoaStage(MoaBase):
             Clock.schedule_once(self._do_stage_timeout, self.max_duration)
 
         # start the children and everything going
-        self.increment_loop(self, start=True)
+        self.increment_loop(source=self, start=True)
         return True
 
     def on_paused(self, instance, value, set_children=True, **kwargs):

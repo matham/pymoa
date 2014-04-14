@@ -3,39 +3,41 @@
 __all__ = ('Delay', )
 
 import random
-from functools import partial
+import time
 from kivy.clock import Clock
 from kivy.properties import (BooleanProperty, NumericProperty, StringProperty,
     OptionProperty, BoundedNumericProperty, ReferenceListProperty,
     ObjectProperty)
-from kivy.logger import Logger as logging
 from moa.stage.base import MoaStage
 
 
 class Delay(MoaStage):
 
-    _increment_trigger = None
+    def on_paused(self, instance, value, **kwargs):
+        super(Delay, self).on_paused(instance, value, **kwargs)
 
-    def __init__(self, **kwargs):
-        super(Delay, self).__init__(**kwargs)
-        self._increment_func = lambda dt: self.increment_loop(source=self)
-        self._increment_func.__name__ = '{},{}'.format(
-            id(self._increment_func), id(self))
+        if self.disabled or not self.started or self.finished:
+            return
 
-    # TODO: fix kivy dispatch to accept kwargs
-    def on_stop(self, source=None, force=False, **kwargs):
-        if super(Delay, self).on_stop(source=source, **kwargs):
+        if value:
+            self.delay = max(0, self.delay - (time.clock() - self.start_time))
+            Clock.unschedule(self.increment_loop)
+        else:
+            Clock.schedule_once(self.increment_loop, self.delay)
+
+    def on_stop(self, **kwargs):
+        if super(Delay, self).on_stop(**kwargs):
             return True
-        Clock.unschedule(self._increment_func)
+        Clock.unschedule(self.increment_loop)
         return False
 
-    def increment_loop(self, source, **kwargs):
-        if not super(Delay, self).increment_loop(source, **kwargs):
+    def increment_loop(self, *largs, **kwargs):
+        if not super(Delay, self).increment_loop(**kwargs):
             return False
 
         if self.delay_type == 'random':
-            self.value = random.uniform(self.min, self.max)
-        Clock.schedule_once(self._increment_func, self.value)
+            self.delay = random.uniform(self.min, self.max)
+        Clock.schedule_once(self.increment_loop, self.delay)
         return True
 
     min = BoundedNumericProperty(0., min=0.)
@@ -44,6 +46,6 @@ class Delay(MoaStage):
 
     range = ReferenceListProperty(min, max)
 
-    value = BoundedNumericProperty(0.5, min=0.)
+    delay = BoundedNumericProperty(0.5, min=0.)
 
     delay_type = OptionProperty('constant', options=['constant', 'random'])

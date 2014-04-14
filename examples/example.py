@@ -1,7 +1,7 @@
 
 from kivy.config import Config
 Config.set('kivy', 'exit_on_escape', 0)
-from moa.bases import MoaApp
+from moa.app import MoaApp
 from moa.stage.base import MoaStage
 from moa.render.treerender import TreeRender
 
@@ -22,7 +22,7 @@ class PlaygroundApp(MoaApp):
         return renderer.get_root_widget()
 
     def on_start(self):
-        self.start_root_stage(self.root_stage)
+        self.root_stage.dispatch('on_start')
 
 if __name__ == '__main__':
     app = PlaygroundApp()

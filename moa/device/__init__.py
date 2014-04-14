@@ -1,7 +1,6 @@
 
 from moa.threading import CallbackQueue
-from moa.bases import MoaBase
-from kivy.event import EventDispatcher
+from moa.base import MoaBase
 from kivy.properties import BooleanProperty
 from kivy.clock import Clock
 try:
@@ -10,7 +9,7 @@ except ImportError:
     from queue import Queue
 
 
-class Device(MoaBase, EventDispatcher):
+class Device(MoaBase):
     ''' By default, the device does not support multi-threading.
     '''
 
@@ -53,16 +52,3 @@ class Device(MoaBase, EventDispatcher):
 
     def deinit(self, **kwargs):
         pass
-
-
-class InputDevice(Device):
-
-    __events__ = ('on_data', )
-
-    def on_data(self, **kwargs):
-        pass
-
-
-class OutputDevice(Device):
-
-    pass
