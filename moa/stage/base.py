@@ -9,7 +9,6 @@ from kivy.properties import (BooleanProperty, NumericProperty, StringProperty,
     OptionProperty, BoundedNumericProperty, ReferenceListProperty,
     ObjectProperty, ListProperty)
 from kivy.uix.widget import Widget
-from kivy.logger import Logger as logging
 from moa.base import MoaBase
 from moa.threading import CallbackDeque
 
@@ -25,7 +24,7 @@ class StageRender(object):
         pass
 
 
-class MoaStage(Widget, MoaBase):
+class MoaStage(MoaBase, Widget):
 
     __events__ = ('on_start', 'on_stop', )
     ''' stop is dispatched when the children and itself needs to stop.
@@ -45,15 +44,29 @@ class MoaStage(Widget, MoaBase):
     children not done, so we know that we are ready to finish.
     '''
     _schedule_queue = None
+    _schedule_increment = None
 
     def __init__(self, **kwargs):
+        self.size_hint = None, None
+        self.size = 0, 0
         super(MoaStage, self).__init__(**kwargs)
         self._pause_list = []
         self._schedule_queue = CallbackDeque(
                                     Clock.create_trigger(self._service_queue))
+        self._schedule_increment = \
+        lambda dt: self.parent.increment_loop(source=self)
 
-    def recover(self, options={}, **kwargs):
-        pass
+    def get_state(self, state=None):
+        if state is None:
+            state = {}
+        for attr in ('name', 'disabled', 'finished', 'paused', 'count'):
+            state[attr] = getattr(self, attr)
+        return state
+
+    def recover(self, state):
+        self.clear()
+        for k, v in state.iteritems():
+            setattr(self, k, v)
 
     def add_widget(self, widget, index=None, **kwargs):
         if not isinstance(widget, MoaStage):
@@ -62,6 +75,8 @@ class MoaStage(Widget, MoaBase):
             self.add_stage(widget, index, **kwargs)
 
     def add_stage(self, stage, index=None, **kwargs):
+        ''' Different than widget because of None.
+        '''
         stages = self.stages
         if not isinstance(stage, MoaStage):
             raise Exception('{} is not an instance of MoaStage and cannot be '
@@ -132,13 +147,16 @@ class MoaStage(Widget, MoaBase):
         must return if stage was started, false otherwise. True means it was
         eaten - stage started. So true stops the dispatch (unless parallel).
         this must be called through super.
+
+        When paused, we still start the next stage. The stage is responsible for
+        pausing, once started.
         '''
         if self.disabled:
-            logging.info('Moa: stage {} disabled'.format(self))
+            self.logger.debug('Skipped starting disabled stage')
             return False
         if self.started and not self.finished:
-            logging.info('Moa: Already started {}, cannot start while running'.
-                         format(self))
+            self.logger.debug('Already started stage - restarting')
+        self.logger.trace('Starting stage')
 
         self.clear()
         # the stage needs to end after max_duration if provided
@@ -149,7 +167,7 @@ class MoaStage(Widget, MoaBase):
         self.increment_loop(source=self, start=True)
         return True
 
-    def on_paused(self, instance, value, set_children=True, **kwargs):
+    def on_paused(self, instance, value, recurse=True, **kwargs):
         if self.disabled or not self.started or self.finished:
             return
 
@@ -157,7 +175,7 @@ class MoaStage(Widget, MoaBase):
             # we paused so we need to pause the clock and save elapsed time
             self.elapsed_time += time.clock() - self.start_time
             Clock.unschedule(self._do_stage_timeout)
-            if set_children:
+            if recurse:
                 pause_list = self._pause_list
                 for child in self.stages:
                     # only pause children not yet paused
@@ -169,7 +187,7 @@ class MoaStage(Widget, MoaBase):
             if self.max_duration > 0.:
                 Clock.schedule_once(self._do_stage_timeout, max(0.,
                 self.max_duration - self.elapsed_time))
-            if set_children:
+            if recurse:
                 for child in self._pause_list:
                     child.paused = False
 
@@ -177,37 +195,37 @@ class MoaStage(Widget, MoaBase):
         '''When called, it must stop stage and finished must be True if it
         returns False. Whether started or not.
         If it returns True, dispatching stops. To allow dispatching to reach
-        everywhere, return False. It is the reponsobility of the one returning
+        everywhere, return False. It is the responsibility of the one returning
         True, to dispatch stop with original source  at source when ready to
         stop.
         '''
+        if not self.started or self.finished:
+            return False
         for c in self.stages[:]:
-            if not c.finished and not c.disabled:
-                if c.dispatch('on_stop', source=source, force=force, **kwargs):
-                    assert not force
-                    return True
+            if c.dispatch('on_stop', source=source, force=force, **kwargs):
+                assert not force
+                return True
         # all children were stopped, so we can stop now
         Clock.unschedule(self._do_stage_timeout)
         self.finished = True
         if source is self:
             parent = self.parent
             if parent is not None:
-                self._schedule_queue.append(parent.increment_loop, source=self)
+                Clock.schedule_once(self._schedule_increment)
         return False
 
     def on_disabled(self, instance, value, **kwargs):
+        ''' Dispatch.
+        '''
         if value and self.started and not self.finished:
             self.dispatch('on_stop', source=self, force=True)
-        elif not value:
-            self.clear()
 
-    def clear(self, **kwargs):
+    def clear(self, recurse=False, **kwargs):
         '''Clears started etc. stops running if running.
         '''
         if self.started and not self.finished:
-            logging.exception('Moa: Cleared {}, but stage was not finished'.
-                              format(self))
-            self.dispatch('on_stop', force=True)
+            self.logger.warning('Clearing unfinished stage, may lead to state '
+                                'corruption')
 
         self.finished = False
         self.started = False
@@ -216,14 +234,19 @@ class MoaStage(Widget, MoaBase):
         self.start_time = 0.
         self._loop_done = False
         self._loop_end = False
-        for child in self.stages[:]:
-            child.clear()
+        if recurse:
+            for child in self.stages[:]:
+                child.clear(recurse)
         return True
 
     def increment_loop(self, source=None, **kwargs):
+        ''' Only allowed to be called when after on_stop, or if class finished
+        lopp on its own.
+
+        source None is the same as self.
+        '''
         if self.finished:
-            logging.warning('Moa: ignored increment {}, because stage is '
-                            'finished'.format(self))
+            self.logger.exception('Ignored increment on finished stage')
             return False
 
         start = kwargs.get('start', False)
@@ -233,13 +256,16 @@ class MoaStage(Widget, MoaBase):
         order = self.order
 
         if start:
+            for child in children:
+                child.clear()
             self._loop_end = True
         if source is None:
             source = self
-        if source is self:
+        if source is self and not start:
             self._loop_done = True
         loop_done = self._loop_done
-        done = self._loop_end = (self._loop_end or (comp_type == 'any' and
+        done = self._loop_end = (self._loop_end or
+            (comp_type == 'any' and
             (not comp_list or (loop_done and self in comp_list) or
              any([c.finished and not c.disabled for c in comp_list]))) or
             (comp_type == 'all' and
@@ -256,7 +282,6 @@ class MoaStage(Widget, MoaBase):
                     continue
                 if not child.finished:
                     if done:
-                        # TODO: make this a kw param and use dispatch
                         child.dispatch('on_stop', source=child)
                         return False
                     elif child.started:
