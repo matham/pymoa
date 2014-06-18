@@ -1,15 +1,17 @@
 from __future__ import absolute_import
 
 
-__all__ = ('CallbackQueue', )
+__all__ = ('CallbackDeque', 'CallbackQueue', 'ScheduledEventLoop')
 
-import inspect
-from threading import RLock
+from collections import defaultdict, deque
+from threading import RLock, Event, Thread
+from kivy.clock import Clock
 try:
     from Queue import Queue
 except ImportError:
     from queue import Queue
-from collections import deque
+import six
+import sys
 
 
 class CallbackDeque(deque):
@@ -79,34 +81,166 @@ class CallbackQueue(Queue):
         return Queue.get(self, False)
 
 
-class ThreadExec(object):
+class ScheduledEvent(object):
 
-    _exec_queue = None
-    _schedule_lock = None
-    _schedule = None
-    _thread = None
+    repeat = False
+    func_kwargs = None
+    callback = None
+    scheduled_callbacks = None
+    trigger = False
+    completed = False
+    unique = False
 
-    def __init__(self, allow_async=True, **kwargs):
-        super(ThreadExec, self).__init__(**kwargs)
+    def __init__(self, callback=None, func_kwargs={}, repeat=False,
+                 trigger=False, unique=True, **kwargs):
+        self.callback = callback
+        self.func_kwargs = func_kwargs
+        self.repeat = repeat
+        self.scheduled_callbacks = []
+        self.trigger = trigger
+        self.unique = unique
 
-        if allow_async:
-            self._exec_queue = Queue()
-            self._schedule_lock = RLock()
-            self._schedule = {}
+
+class ScheduledEventLoop(object):
+
+    __callback_lock = None
+    __thread_event = None
+    __thread = None
+    __signal_exit = False
+    __callbacks = None
+    __current_callback = None
+    _kivy_trigger = None
+    target = None
+
+    def __init__(self, target=None, **kwargs):
+        super(ScheduledEventLoop, self).__init__(**kwargs)
+        self.__callback_lock = RLock()
+        self.__thread_event = Event()
+        self.__callbacks = defaultdict(list)
+        self._kivy_trigger = Clock.create_trigger(self._service_kivy_thread)
+        self.__thread = Thread(target=self._callback_thread)
+        self.__thread.start()
+        self.target = target
 
     def __del__(self):
-        pass
+        self.__signal_exit = True
+        self.__thread_event.set()
+        super(ScheduledEventLoop, self).__del__()
 
-    def _thread_exec(self):
-        pass
+    def request_callback(self, name, callback=None, trigger=False,
+                         repeat=False, unique=True, **kwargs):
+        ''' If not repeat and not unique, after the first call to name it'd be
+        considered complete.
+        '''
+        lock = self.__callback_lock
 
-    def schedule(self, name, callback, **kwargs):
-        func = getattr(self, name)
-        if '_external' not in inspect.getargspec(func).args:
-            raise Exception('')
+        ev = ScheduledEvent(callback=callback, func_kwargs=kwargs,
+                            repeat=repeat, trigger=trigger, unique=unique)
+        lock.acquire()
+        self.__callbacks[name].append(ev)
+        lock.release()
+        if trigger:
+            self.__thread_event.set()
+        return ev
 
-    def schedule_repeated(self, name, callback, **kwargs):
-        pass
+    def remove_request(self, name, callback_id, **kwargs):
+        callbacks = self.__callbacks
+        lock = self.__callback_lock
 
-    def unschedule_repeated(self, name, callback):
-        pass
+        if name in callbacks:
+            lock.acquire()
+            callbacks = callbacks[name]
+            lock.release()
+            try:
+                callbacks.remove(callback_id)
+            except ValueError:
+                pass
+
+    def _schedule_thread_callbacks(self, name, result, callbacks,
+                                   src_callbacks, event):
+        got_callback = False
+        for ev in callbacks:
+            if (ev.unique and ev is not event) or ev not in src_callbacks:
+                continue
+
+            if ev.callback is None:
+                if not ev.repeat:
+                    try:
+                        src_callbacks.remove(ev)
+                    except ValueError:
+                        pass
+                continue
+
+            ev.scheduled_callbacks.append(result)
+            if not ev.repeat:
+                ev.completed = True
+            got_callback = True
+
+        return got_callback
+
+    def _service_kivy_thread(self, dt):
+        callbacks = self.__callbacks
+        keys = callbacks.keys()
+
+        for name in keys:
+            cb = callbacks[name]
+            c = list(cb)
+            for ev in c:
+                if not len(ev.scheduled_callbacks):
+                    continue
+
+                scheduled_callbacks = list(ev.scheduled_callbacks)
+                del ev.scheduled_callbacks[:len(scheduled_callbacks)]
+                callback = ev.callback
+
+                for result, err in scheduled_callbacks:
+                    if ev not in cb:
+                        break
+                    if err is not None:
+                        six.reraise(*err)
+                    callback(result)
+
+                if ev.completed and not len(ev.scheduled_callbacks):
+                    try:
+                        cb.remove(ev)
+                    except ValueError:
+                        pass
+
+    def _callback_thread(self):
+        callbacks = self.__callbacks
+        aquire = self.__callback_lock.acquire
+        release = self.__callback_lock.release
+        event = self.__thread_event
+        schedule = self._schedule_thread_callbacks
+        trigger = self._kivy_trigger
+        target = self.target
+
+        while 1:
+            event.wait()
+            if self.__signal_exit:
+                break
+            has_events = False
+            aquire()
+            keys = callbacks.keys()
+            event.clear()
+            release()
+            for key in keys:
+                cb = callbacks[key]
+                c = list(cb)
+                for ev in c:
+                    if not ev.trigger or ev.completed or ev not in cb:
+                        continue
+                    try:
+                        if target is not None:
+                            res = getattr(target, key)(**ev.func_kwargs)
+                        else:
+                            res = getattr(self, key)(**ev.func_kwargs)
+                        err = None
+                    except Exception:
+                        err = sys.exc_info()
+                    if ev.repeat:
+                        has_events = True
+                    if schedule(key, (res, err), c, cb, ev):
+                        trigger()
+            if has_events:
+                event.set()
