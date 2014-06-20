@@ -1,7 +1,7 @@
 ''' largs is banned.
 '''
 
-__all__ = ('MoaStage', 'StageRender')
+__all__ = ('MoaStage', )
 
 import time
 from kivy.clock import Clock
@@ -11,17 +11,6 @@ from kivy.properties import (BooleanProperty, NumericProperty, StringProperty,
 from kivy.uix.widget import Widget
 from moa.base import MoaBase
 from moa.threading import CallbackDeque
-
-
-class StageRender(object):
-    '''The class used to render graphical display of stages.
-    '''
-
-    def add_render(self, stage, widget, **kwargs):
-        pass
-
-    def remove_render(self, stage, widget, **kwargs):
-        pass
 
 
 class MoaStage(MoaBase, Widget):
@@ -58,10 +47,20 @@ class MoaStage(MoaBase, Widget):
             setattr(self, k, v)
 
     def add_widget(self, widget, index=None, **kwargs):
-        if not isinstance(widget, MoaStage):
-            self.add_display(widget, index=index, **kwargs)
-        else:
+        if widget is self:
+            raise Exception('You cannot add yourself in a MoaStage')
+
+        if isinstance(widget, MoaStage):
             self.add_stage(widget, index, **kwargs)
+        elif not isinstance(widget, Widget):
+            raise Exception('add_widget() can be used only with Widget '
+                            'or MoaStage classes.')
+        else:
+            children = self.children
+            if index is None or index >= len(children):
+                children.append(widget)
+            else:
+                children.insert(widget, index)
 
     def add_stage(self, stage, index=None, **kwargs):
         ''' Different than widget because of None.
@@ -71,8 +70,6 @@ class MoaStage(MoaBase, Widget):
             raise Exception('{} is not an instance of MoaStage and cannot be '
                             'added to stages'.format(stage))
         stage = stage.__self__
-        if stage is self:
-            raise Exception('You cannot add yourself in a stage')
         parent = stage.parent
         # check if widget is already a child of another widget
         if parent:
@@ -88,25 +85,14 @@ class MoaStage(MoaBase, Widget):
         else:
             stages.insert(stage, index)
 
-    def add_display(self, widget, **kwargs):
-        obj = self
-        while obj.stage_render is None:
-            parent = obj.parent
-            if parent is not None and hasattr(parent, 'stage_render'):
-                obj = parent
-            else:
-                break
-
-        if obj.stage_render is None:
-            raise Exception('Stage does not have renderer, so it cannot '
-                            'accept {}'.format(widget))
-        obj.stage_render.add_render(self, widget, **kwargs)
-
     def remove_widget(self, widget, **kwargs):
-        if not isinstance(widget, MoaStage):
-            self.remove_display(widget, **kwargs)
-        else:
+        if isinstance(widget, MoaStage):
             self.remove_stage(widget, **kwargs)
+        else:
+            try:
+                self.children.remove(widget)
+            except ValueError:
+                pass
 
     def remove_stage(self, stage, **kwargs):
         try:
@@ -114,20 +100,6 @@ class MoaStage(MoaBase, Widget):
             stage.parent = None
         except ValueError:
             pass
-
-    def remove_display(self, widget, **kwargs):
-        obj = self
-        while obj.stage_render is None:
-            parent = obj.parent
-            if parent is not None and hasattr(parent, 'stage_render'):
-                obj = parent
-            else:
-                break
-
-        if obj.stage_render is None:
-            raise Exception('Stage does not have renderer, so it cannot '
-                            'remove {}'.format(widget))
-        obj.stage_render.remove_render(self, widget, **kwargs)
 
     def on_paused(self, instance, value, recurse=True, **kwargs):
         if self.disabled or not self.started or self.finished:
