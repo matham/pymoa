@@ -154,12 +154,12 @@ class MoaStage(MoaBase, Widget):
         else:
             self._loop_finishing = True
         self.step_stage(source=self)
-        return False
+        return True
 
     def on_disabled(self, instance, value, **kwargs):
         ''' Dispatch.
         '''
-        if value and self.started and not self.finished:
+        if value:
             self.stop()
 
     def clear(self, recurse=False, **kwargs):
@@ -244,8 +244,7 @@ class MoaStage(MoaBase, Widget):
         i = None
         if done:
             for child in children:
-                if not child.disabled and child.started and not child.finished:
-                    child.stop()
+                if child.stop():
                     return False
             if not loop_done:
                 self.stop(stage=False)
