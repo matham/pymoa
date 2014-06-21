@@ -1,10 +1,20 @@
 
 
-__all__ = ('DigitalPort', )
+__all__ = ('DigitalGate', 'DigitalPort')
 
-from kivy.properties import DictProperty
+from kivy.properties import DictProperty, BooleanProperty
 from moa.device import Device
 import re
+
+
+class DigitalGate(Device):
+
+    state = BooleanProperty(False)
+
+    def set_state(self, **kwargs):
+        ''' Used by user to set the state.
+        '''
+        pass
 
 
 class DigitalPort(Device):
