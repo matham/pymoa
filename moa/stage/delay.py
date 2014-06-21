@@ -5,39 +5,39 @@ __all__ = ('Delay', )
 import random
 import time
 from kivy.clock import Clock
-from kivy.properties import (BooleanProperty, NumericProperty, StringProperty,
-    OptionProperty, BoundedNumericProperty, ReferenceListProperty,
-    ObjectProperty)
-from moa.stage.base import MoaStage
+from kivy.properties import (OptionProperty, BoundedNumericProperty,
+    ReferenceListProperty)
+from moa.stage import MoaStage
 
 
 class Delay(MoaStage):
 
-    def on_paused(self, instance, value, **kwargs):
-        super(Delay, self).on_paused(instance, value, **kwargs)
-
-        if self.disabled or not self.started or self.finished:
-            return
-
-        if value:
+    def pause(self, *largs, **kwargs):
+        if super(Delay, self).pause(*largs, **kwargs):
             self.delay = max(0, self.delay - (time.clock() - self.start_time))
-            Clock.unschedule(self.increment_loop)
-        else:
-            Clock.schedule_once(self.increment_loop, self.delay)
-
-    def on_stop(self, **kwargs):
-        if super(Delay, self).on_stop(**kwargs):
+            Clock.unschedule(self.step_stage)
             return True
-        Clock.unschedule(self.increment_loop)
         return False
 
-    def increment_loop(self, *largs, **kwargs):
-        if not super(Delay, self).increment_loop(**kwargs):
+    def unpause(self, *largs, **kwargs):
+        if super(Delay, self).unpause(*largs, **kwargs):
+            Clock.schedule_once(self.step_stage, self.delay)
+            return True
+        return False
+
+    def stop(self, *largs, **kwargs):
+        if super(Delay, self).stop(*largs, **kwargs):
+            Clock.unschedule(self.step_stage)
+            return True
+        return False
+
+    def step_stage(self, *largs, **kwargs):
+        if not super(Delay, self).step_stage(*largs, **kwargs):
             return False
 
         if self.delay_type == 'random':
             self.delay = random.uniform(self.min, self.max)
-        Clock.schedule_once(self.increment_loop, self.delay)
+        Clock.schedule_once(self.step_stage, self.delay)
         return True
 
     min = BoundedNumericProperty(0., min=0.)
