@@ -101,29 +101,42 @@ class MoaStage(MoaBase, Widget):
         except ValueError:
             pass
 
-    def on_paused(self, instance, value, recurse=True, **kwargs):
-        if self.disabled or not self.started or self.finished:
-            return
+    def pause(self, recurse=True):
+        paused = self.paused
+        self.paused = True
 
-        if value:
-            # we paused so we need to pause the clock and save elapsed time
-            self.elapsed_time += time.clock() - self.start_time
-            Clock.unschedule(self._do_stage_timeout)
-            if recurse:
-                pause_list = self._pause_list
-                for child in self.stages:
-                    # only pause children not yet paused
-                    if not child.paused:
-                        child.paused = True
-                        pause_list.append(child)
+        if self.disabled or not self.started or self.finished or paused:
+            return False
+
+        # we paused so we need to pause the clock and save elapsed time
+        self.elapsed_time += time.clock() - self.start_time
+        Clock.unschedule(self._do_stage_timeout)
+        if recurse:
+            pause_list = self._pause_list
+            for child in self.stages:
+                # only pause children not yet paused
+                if not child.paused:
+                    child.pause()
+                    pause_list.append(child)
+        return True
+
+    def unpause(self, recurse=True):
+        paused = self.paused
+        self.paused = False
+
+        if self.disabled or not self.started or self.finished or not paused:
+            return False
+
+        self.start_time = time.clock()
+        if self.max_duration > 0.:
+            Clock.schedule_once(self._do_stage_timeout, max(0.,
+            self.max_duration - self.elapsed_time))
+        if recurse:
+            for child in self._pause_list:
+                child.unpause()
         else:
-            self.start_time = time.clock()
-            if self.max_duration > 0.:
-                Clock.schedule_once(self._do_stage_timeout, max(0.,
-                self.max_duration - self.elapsed_time))
-            if recurse:
-                for child in self._pause_list:
-                    child.paused = False
+            self._pause_list = []
+        return True
 
     def stop(self, stage=True, **kwargs):
         '''Stops async recursively. Use self.finished to check when really
