@@ -1,95 +1,100 @@
 
 
-__all__ = ('DigitalPortStage', )
+__all__ = ('GateStage', )
 
 
 from kivy.properties import (BooleanProperty, StringProperty,
-    BoundedNumericProperty, ObjectProperty, OptionProperty)
+    BoundedNumericProperty, ObjectProperty)
 from kivy.clock import Clock
-from moa.stage.base import MoaStage
-from moa.device.gate import InputChannel, OutputChannel
+from time import clock
+from moa.stage import MoaStage
 
 
-class DigitalPortStage(MoaStage):
+class GateStage(MoaStage):
 
-    __last_device = None
-    __last_state = None
-    __scheduled = False
-    __request_event = None
+    _last_state = None
+    _start_hold_time = None
 
-    def on_stop(self, **kwargs):
-        if super(DigitalPortStage, self).on_stop(**kwargs):
-            return True
-
-        device = self.__last_device
-        if device is not None:
-            device.remove_request(name=('set_state' if isinstance(device,
-            OutputChannel) else 'get_state'), callback_id=self.__request_event)
-            self.__last_device = None
-        if self.__scheduled:
-            Clock.unschedule(self._hold_timeout)
-            self.__scheduled = False
-        return False
-
-    def _hold_timeout(self, dt):
+    def _hold_timeout(self, *largs):
         t = self.hold_time
-        if t <= dt:
-            self.__scheduled = False
-            device = self.__last_device
-            device.remove_request(name=('set_state' if isinstance(device,
-            OutputChannel) else 'get_state'), callback_id=self.__request_event)
-            self.__last_device = None
-            self.increment_loop()
-        else:
-            Clock.schedule_once(self._hold_timeout, t - dt)
+        elapsed = clock() - self._start_hold_time
 
-    def _port_callback(self, value, **kwargs):
-        last_val = self.__last_state
-        self.__last_state = value
+        if t <= elapsed:
+            self.device.unbind(**{self.state_attr: self._port_callback})
+            self.step_stage()
+        else:
+            Clock.schedule_once(self._hold_timeout, t - elapsed)
+
+    def _port_callback(self, instance, value):
+        last_val = self._last_state
+        self._last_state = value
         exit_state = self.exit_state
-        done = False
         if last_val == value:
             return
 
-        if self.__scheduled:
-            Clock.unschedule(self._hold_timeout)
-            self.__scheduled = False
-
-        if value == exit_state and (self.use_initial or last_val is not None):
+        if value == exit_state and (self.use_initial or
+                                    last_val is not None):
             t = self.hold_time
             if t:
+                self._start_hold_time = clock()
                 Clock.schedule_once(self._hold_timeout, t)
-                self.__scheduled = True
             else:
-                done = True
+                self.device.unbind(**{self.state_attr: self._port_callback})
+                self.step_stage()
+                return False
+        else:
+            Clock.unschedule(self._hold_timeout)
 
-        if done:
-            self._hold_timeout(0)
+    def pause(self, *largs, **kwargs):
+        if super(GateStage, self).pause(*largs, **kwargs):
+            device = self.device
+            if device is not None:
+                device.unbind(**{self.state_attr: self._port_callback})
+            Clock.unschedule(self._hold_timeout)
+            return True
+        return False
 
-    def increment_loop(self, **kwargs):
-        if not super(DigitalPortStage, self).increment_loop(**kwargs):
-            return False
+    def unpause(self, *largs, **kwargs):
+        if super(GateStage, self).unpause(*largs, **kwargs):
+            device = self.device
+            if device is None:
+                raise AttributeError('A device has not been assigned to this '
+                                     'stage, {}'.format(self))
+            self._last_state = None
+            device.bind(**{self.state_attr: self._port_callback})
+            self._port_callback(device, getattr(device, self.state_attr))
+            return True
+        return False
 
-        self.__last_device = device = self.device
+    def stop(self, *largs, **kwargs):
+        if super(GateStage, self).stop(*largs, **kwargs):
+            device = self.device
+            if device is not None:
+                device.unbind(**{self.state_attr: self._port_callback})
+            Clock.unschedule(self._hold_timeout)
+            return True
+        return False
+
+    def step_stage(self, *largs, **kwargs):
+        device = self.device
         if device is None:
             raise AttributeError('A device has not been assigned to this '
                                  'stage, {}'.format(self))
 
-        if isinstance(device, InputChannel):
-            name = 'get_state'
-            trigger = True
-        else:
-            name = 'set_state'
-            trigger = False
-        self.__last_state = None
+        if not super(GateStage, self).step_stage(*largs, **kwargs):
+            return False
 
-        self.__request_event = device.request_callback(name=name,
-            callback=self._port_callback, trigger=trigger, repeat=True)
-        return True
+        self._last_state = None
+        device.bind(**{self.state_attr: self._port_callback})
+        return (self._port_callback(device, getattr(device, self.state_attr))
+                is not False)
 
-    device = ObjectProperty(None, allownone=True,
-                            basesbaseclass=(InputChannel, OutputChannel))
+    device = ObjectProperty(None, allownone=True)
     '''The input device.
+    '''
+
+    state_attr = StringProperty('state')
+    ''' The name of the attr in device to bind.
     '''
 
     exit_state = BooleanProperty(False)
