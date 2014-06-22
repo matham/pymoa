@@ -12,22 +12,30 @@ from moa.stage import MoaStage
 
 class Delay(MoaStage):
 
+    _delay_step_trigger = None
+
+    def __init__(self, **kwargs):
+        super(Delay, self).__init__(**kwargs)
+        self._delay_step_trigger = Clock.create_trigger(lambda dt:
+                                                        self.step_stage())
+
     def pause(self, *largs, **kwargs):
         if super(Delay, self).pause(*largs, **kwargs):
             self.delay = max(0, self.delay - (time.clock() - self.start_time))
-            Clock.unschedule(self.step_stage)
+            self._delay_step_trigger.cancel()
             return True
         return False
 
     def unpause(self, *largs, **kwargs):
         if super(Delay, self).unpause(*largs, **kwargs):
-            Clock.schedule_once(self.step_stage, self.delay)
+            self._delay_step_trigger.timeout = self.delay
+            self._delay_step_trigger()
             return True
         return False
 
     def stop(self, *largs, **kwargs):
         if super(Delay, self).stop(*largs, **kwargs):
-            Clock.unschedule(self.step_stage)
+            self._delay_step_trigger.cancel()
             return True
         return False
 
@@ -37,7 +45,9 @@ class Delay(MoaStage):
 
         if self.delay_type == 'random':
             self.delay = random.uniform(self.min, self.max)
-        Clock.schedule_once(self.step_stage, self.delay)
+
+        self._delay_step_trigger.timeout = self.delay
+        self._delay_step_trigger()
         return True
 
     min = BoundedNumericProperty(0., min=0.)
