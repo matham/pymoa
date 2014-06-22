@@ -182,9 +182,15 @@ class MoaStage(MoaBase, Widget):
                 child.clear(recurse)
         return True
 
+    def get_skip_stage(self):
+        ''' If True, when step_stage is called, it must continue the chain,
+        even if not actually started.
+        '''
+        return self.disabled
+
     def step_stage(self, source=None, **kwargs):
         ''' Only allowed to be called when after on_stop, or if class finished
-        lopp on its own in which case finishing is True.
+        loop on its own in which case finishing is True.
 
         source None is the same as self.
 
@@ -193,6 +199,10 @@ class MoaStage(MoaBase, Widget):
         from starting set it to disabled, and not by just returning here False.
         Otherwise, we may never proceed to the next stage because the stop
         condition is not met, but start returns False.
+
+        TODO: if the stage itself can complete the stage and no child was
+        started because disabled, check after trying to start children if the
+        state should be completed.
         '''
 
         children = self.stages[:]
@@ -233,9 +243,10 @@ class MoaStage(MoaBase, Widget):
         done = self._loop_finishing = (self.finishing or self._loop_finishing
             or (comp_type == 'any' and
             (not comp_list or (loop_done and self in comp_list) or
-             any([c.finished and not c.disabled for c in comp_list])))
+             any([c.finished and not c.get_skip_stage() for c in comp_list])))
             or (comp_type == 'all' and
-            ((comp_list and all([(c.finished or c.disabled) and c is not self
+            ((comp_list and all([(c.finished or c.get_skip_stage()) and
+                                 c is not self
             or c is self and loop_done for c in comp_list]))
             or (not comp_list and loop_done and
             all([c.finished for c in children])))))
@@ -259,18 +270,19 @@ class MoaStage(MoaBase, Widget):
                 # if we don't need to finish, find the first not started child
                 for k in range(len(children)):
                     child = children[k]
-                    if not child.disabled and not child.finished:
+                    if not child.get_skip_stage() and not child.finished:
                         # if a child is already running we cannot proceed
                         if child.started:
                             return False
-                        elif i is None:
+                        else:
                             i = k
                             break
 
                 # if we didn't find a child to start, then just wait
                 if i is not None:
                     for child in children[i:]:
-                        if child.step_stage():
+                        if not child.get_skip_stage():
+                            child.step_stage()
                             return False
                 logger.warning('Could not start a child; this code should '
                                'not have been reached')
@@ -285,8 +297,7 @@ class MoaStage(MoaBase, Widget):
 
             if not start:
                 for child in children:
-                    if not child.disabled:
-                        child.clear()
+                    child.clear()
                 self.loop_done = self._loop_finishing = False
                 t = time.clock()
                 self.elapsed_time += t - self.start_time
@@ -295,7 +306,8 @@ class MoaStage(MoaBase, Widget):
 
             if order == 'serial':
                 for child in children:
-                    if child.step_stage():
+                    if not child.get_skip_stage():
+                        child.step_stage()
                         break
             else:
                 for child in children:
