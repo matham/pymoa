@@ -20,7 +20,9 @@ class GateStage(MoaStage):
         elapsed = clock() - self._start_hold_time
 
         if t <= elapsed:
-            self.device.unbind(**{self.state_attr: self._port_callback})
+            device = self.device
+            device.deactivate(self)
+            device.unbind(**{self.state_attr: self._port_callback})
             self.step_stage()
         else:
             Clock.schedule_once(self._hold_timeout, t - elapsed)
@@ -39,7 +41,9 @@ class GateStage(MoaStage):
                 self._start_hold_time = clock()
                 Clock.schedule_once(self._hold_timeout, t)
             else:
-                self.device.unbind(**{self.state_attr: self._port_callback})
+                device = self.device
+                device.deactivate(self)
+                device.unbind(**{self.state_attr: self._port_callback})
                 self.step_stage()
                 return False
         else:
@@ -49,6 +53,7 @@ class GateStage(MoaStage):
         if super(GateStage, self).pause(*largs, **kwargs):
             device = self.device
             if device is not None:
+                device.deactivate(self)
                 device.unbind(**{self.state_attr: self._port_callback})
             Clock.unschedule(self._hold_timeout)
             return True
@@ -61,6 +66,7 @@ class GateStage(MoaStage):
                 raise AttributeError('A device has not been assigned to this '
                                      'stage, {}'.format(self))
             self._last_state = None
+            device.activate(self)
             device.bind(**{self.state_attr: self._port_callback})
             self._port_callback(device, getattr(device, self.state_attr))
             return True
@@ -70,6 +76,7 @@ class GateStage(MoaStage):
         if super(GateStage, self).stop(*largs, **kwargs):
             device = self.device
             if device is not None:
+                device.deactivate(self)
                 device.unbind(**{self.state_attr: self._port_callback})
             Clock.unschedule(self._hold_timeout)
             return True
@@ -85,6 +92,7 @@ class GateStage(MoaStage):
             return False
 
         self._last_state = None
+        device.activate(self)
         device.bind(**{self.state_attr: self._port_callback})
         return (self._port_callback(device, getattr(device, self.state_attr))
                 is not False)
