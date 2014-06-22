@@ -6,21 +6,26 @@
 
 <RootStage>:
     name: 'Root stage'
-    on_parent: self.add_display(Factory.get('StageDisplay')(stage=self))
     completion_list: self.stages
+    StageDisplay
     Delay:
         name: '1st stage'
-        on_parent: self.add_display(Factory.get('StageDisplay')(stage=self))
-        delay: .5 * self.count + .5
+        delay: self.count + .5
         repeat: 10
-        completion_type: 'any'
+        completion_type: 'all'
+        StageDisplay
         Delay:
             name: 'Inner stage'
-            on_parent: self.add_display(Factory.get('StageDisplay')(stage=self))
             delay: 0.025 * self.count + 0.125
             repeat: 20
+            StageDisplay
     Delay:
         name: '2nd stage'
-        on_parent: self.add_display(Factory.get('StageDisplay')(stage=self))
         delay: 0.025 * self.count + 0.125
         repeat: 10
+        StageDisplay
+    Delay:
+        name: '3nd stage'
+        delay: 0.025 * self.count + 0.125
+        repeat: 10
+        StageDisplay
