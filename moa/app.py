@@ -12,7 +12,6 @@ from kivy.app import App
 from kivy.lang import Builder
 
 import moa.factory_registers
-from moa.stage.base import MoaStage
 from moa.compat import decode_dict, PY2
 
 
