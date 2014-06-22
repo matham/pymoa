@@ -1,8 +1,8 @@
 
 
-__all__ = ('DigitalGate', 'DigitalPort')
+__all__ = ('DigitalGate', 'DigitalPort', 'ButtonGate')
 
-from kivy.properties import DictProperty, BooleanProperty
+from kivy.properties import DictProperty, BooleanProperty, ObjectProperty
 from moa.device import Device
 import re
 
@@ -29,7 +29,7 @@ class DigitalPort(Device):
         pat = re.compile('[_A-Za-z][_a-zA-Z0-9]*$')
         match = re.match
 
-        for k, v in mapping.iteritems():
+        for k, _ in mapping.iteritems():
             if hasattr(self, k):
                 raise Exception('{} already has a attribute named {}'
                                 .format(self, k))
@@ -55,3 +55,31 @@ class DigitalPort(Device):
 
     def set_state(self, **kwargs):
         pass
+
+
+class ButtonGate(DigitalGate):
+
+    button = ObjectProperty(None, allownone=True)
+
+    def _update_state(self, instance, value):
+        self.state = value == 'down'
+
+    def activate(self, *largs, **kwargs):
+        if super(ButtonGate, self).activate(*largs, **kwargs):
+            button = self.button
+            if button is None:
+                raise AttributeError('A button has not been assigned to this '
+                                     'device, {}'.format(self))
+            button.bind(state=self._update_state)
+            return True
+        return False
+
+    def deactivate(self, *largs, **kwargs):
+        if super(ButtonGate, self).deactivate(*largs, **kwargs):
+            button = self.button
+            if button is None:
+                raise AttributeError('A button has not been assigned to this '
+                                     'device, {}'.format(self))
+            button.unbind(state=self._update_state)
+            return True
+        return False
