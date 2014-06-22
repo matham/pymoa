@@ -42,7 +42,9 @@ simple_display_kv = '''
                 padding: 10, 0
                 text: 'Pause'
                 state: 'down' if root.stage.paused else 'normal'
-                on_state: root.stage.paused = self.state == 'down'
+                on_state:
+                    root.stage.pause() if self.state == 'down' else \
+                    root.stage.unpause()
     BoxLayout:
         padding: 25, 10
         spacing: 20
