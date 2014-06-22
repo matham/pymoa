@@ -133,9 +133,9 @@ class MoaStage(MoaBase, Widget):
             self.max_duration - self.elapsed_time))
         if recurse:
             for child in self._pause_list:
-                child.unpause()
-        else:
-            self._pause_list = []
+                if child.paused:
+                    child.unpause()
+        self._pause_list = []
         return True
 
     def stop(self, stage=True, **kwargs):
