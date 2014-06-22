@@ -215,10 +215,10 @@ class MoaStage(MoaBase, Widget):
         start = (not self.started or self.finished) and source is self
 
         if start:
-            if self.disabled:
-                logger.debug('Skipped starting disabled stage')
+            if self.get_skip_stage():
+                logger.debug('Skipped starting stage')
                 return False
-            logger.trace('Starting stage')
+            logger.debug('Starting stage')
             self.clear()
             for child in children:
                 child.clear()
