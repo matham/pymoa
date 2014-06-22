@@ -2,15 +2,13 @@
 * when dispatching events, returning True stops it.
 '''
 
+__all__ = ('MoaBase', )
+
 
 from weakref import ref
 from kivy.event import EventDispatcher
 from kivy.properties import StringProperty, OptionProperty, ObjectProperty
 import logging
-
-
-class MoaException(Exception):
-    pass
 
 
 class MoaBase(EventDispatcher):
