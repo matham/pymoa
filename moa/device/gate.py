@@ -83,3 +83,10 @@ class ButtonGate(DigitalGate):
             button.unbind(state=self._update_state)
             return True
         return False
+
+    def set_state(self, state, **kwargs):
+        button = self.button
+        if button is None:
+            raise AttributeError('A button has not been assigned to this '
+                                 'device, {}'.format(self))
+        button.state = 'down' if state else 'normal'
