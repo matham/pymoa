@@ -6,7 +6,11 @@ class Device(MoaBase):
     ''' By default, the device does not support multi-threading.
     '''
 
-    _activated_set = set()
+    _activated_set = None
+
+    def __init__(self, **kwargs):
+        super(Device, self).__init__(**kwargs)
+        self._activated_set = set()
 
     def activate(self, identifier, **kwargs):
         active = self._activated_set
