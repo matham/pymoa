@@ -10,7 +10,6 @@ try:
     from Queue import Queue
 except ImportError:
     from queue import Queue
-import six
 import sys
 
 
@@ -84,7 +83,7 @@ class CallbackQueue(Queue):
 class ScheduledEvent(object):
 
     repeat = False
-    func_kwargs = None
+    func_kwargs = {}
     callback = None
     scheduled_callbacks = None
     trigger = False
@@ -108,7 +107,6 @@ class ScheduledEventLoop(object):
     __thread = None
     __signal_exit = False
     __callbacks = None
-    __current_callback = None
     _kivy_trigger = None
     target = None
 
@@ -118,16 +116,36 @@ class ScheduledEventLoop(object):
         self.__thread_event = Event()
         self.__callbacks = defaultdict(list)
         self._kivy_trigger = Clock.create_trigger(self._service_kivy_thread)
-        self.__thread = Thread(target=self._callback_thread)
-        self.__thread.start()
         self.target = target
+        self.start_thread()
 
-    def __del__(self):
+    def clear_events(self):
+        self.__callbacks = defaultdict(list)
+
+    def start_thread(self):
+        '''
+        '''
+        if self.__thread  is not None:
+            return
+        self.__signal_exit = False
+        self.__thread_event.set()
+        self.__thread = Thread(target=self._callback_thread,
+                               name='ScheduledEventLoop')
+        self.__thread.start()
+
+    def stop_thread(self, join=False):
         self.__signal_exit = True
         self.__thread_event.set()
-        super(ScheduledEventLoop, self).__del__()
+        thread = self.__thread
+        if join and thread is not None:
+            thread.join()
 
-    def request_callback(self, name, callback=None, trigger=False,
+    def handle_exception(self, exception, event):
+        ''' Called from the internal thread. Return True means to try again.
+        '''
+        pass
+
+    def request_callback(self, name, callback=None, trigger=True,
                          repeat=False, unique=True, **kwargs):
         ''' If not repeat and not unique, after the first call to name it'd be
         considered complete.
@@ -193,12 +211,13 @@ class ScheduledEventLoop(object):
                 del ev.scheduled_callbacks[:len(scheduled_callbacks)]
                 callback = ev.callback
 
-                for result, err in scheduled_callbacks:
+                for result, func_kwargs in scheduled_callbacks:
                     if ev not in cb:
                         break
-                    if err is not None:
-                        six.reraise(*err)
-                    callback(result)
+                    if ev.unique:
+                        callback(result)
+                    else:
+                        callback(result, kw_in=func_kwargs)
 
                 if ev.completed and not len(ev.scheduled_callbacks):
                     try:
@@ -213,7 +232,7 @@ class ScheduledEventLoop(object):
         event = self.__thread_event
         schedule = self._schedule_thread_callbacks
         trigger = self._kivy_trigger
-        target = self.target
+        handler = self.handle_exception
 
         while 1:
             event.wait()
@@ -228,19 +247,49 @@ class ScheduledEventLoop(object):
                 cb = callbacks[key]
                 c = list(cb)
                 for ev in c:
+                    if self.__signal_exit:
+                        self.__thread = None
+                        return
                     if not ev.trigger or ev.completed or ev not in cb:
                         continue
-                    try:
-                        if target is not None:
-                            res = getattr(target, key)(**ev.func_kwargs)
+
+                    target = self.target
+                    if target is None:
+                        f = getattr(self, key)
+                    else:
+                        if hasattr(self, key):
+                            f = getattr(self, key)
                         else:
-                            res = getattr(self, key)(**ev.func_kwargs)
-                        err = None
-                    except Exception:
-                        err = sys.exc_info()
+                            f = getattr(target, key)
+
+                    try:
+                        failed = retry = None
+                        res = f(**ev.func_kwargs)
+                    except Exception as e:
+                        failed = True
+                        import traceback
+                        retry = handler((e, traceback.format_exc()), ev)
+                        skip = False
+                        while retry:
+                            try:
+                                if ev not in cb:
+                                    skip = True
+                                    break
+                                res = f(**ev.func_kwargs)
+                                failed = retry = None
+                            except Exception as e:
+                                failed = True
+                                retry = bool(handler((e, sys.exc_info()), ev))
+                        if skip:
+                            continue
+                    if failed:
+                        self.__thread = None
+                        return
+
                     if ev.repeat:
                         has_events = True
-                    if schedule(key, (res, err), c, cb, ev):
+                    if schedule(key, (res, ev.func_kwargs), c, cb, ev):
                         trigger()
-            if has_events:
+            if has_events or self.__signal_exit:
                 event.set()
+        self.__thread = None
