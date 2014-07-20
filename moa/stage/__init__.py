@@ -1,4 +1,5 @@
 ''' largs is banned.
+TODO: when completion_type is any, save the one that initiated the stop
 '''
 
 __all__ = ('MoaStage', )
@@ -10,7 +11,6 @@ from kivy.properties import (BooleanProperty, NumericProperty, StringProperty,
     ObjectProperty, ListProperty)
 from kivy.uix.widget import Widget
 from moa.base import MoaBase
-from moa.threading import CallbackDeque
 
 
 class MoaStage(MoaBase, Widget):
@@ -21,18 +21,12 @@ class MoaStage(MoaBase, Widget):
     we paused do not have to be unpaused.
     '''
     _loop_finishing = False
-    _schedule_queue = None
-    _schedule_increment = None
 
     def __init__(self, **kwargs):
         self.size_hint = None, None
         self.size = 0, 0
         super(MoaStage, self).__init__(**kwargs)
         self._pause_list = []
-        self._schedule_queue = CallbackDeque(
-                                    Clock.create_trigger(self._service_queue))
-        self._schedule_increment = \
-        lambda dt: self.parent.step_stage(source=self)
 
     def get_state(self, state=None):
         if state is None:
@@ -41,7 +35,7 @@ class MoaStage(MoaBase, Widget):
             state[attr] = getattr(self, attr)
         return state
 
-    def recover(self, state):
+    def recover_state(self, state):
         self.clear()
         for k, v in state.iteritems():
             setattr(self, k, v)
@@ -203,6 +197,8 @@ class MoaStage(MoaBase, Widget):
         TODO: if the stage itself can complete the stage and no child was
         started because disabled, check after trying to start children if the
         state should be completed.
+
+        This ignores if we're paused.
         '''
 
         children = self.stages[:]
@@ -248,8 +244,8 @@ class MoaStage(MoaBase, Widget):
             ((comp_list and all([(c.finished or c.get_skip_stage()) and
                                  c is not self
             or c is self and loop_done for c in comp_list]))
-            or (not comp_list and loop_done and
-            all([c.finished for c in children])))))
+            or (not comp_list and (not children and loop_done or children and
+            all([c.finished or c.get_skip_stage() for c in children]))))))
 
         # if we need to finish, stop all the children
         i = None
@@ -319,15 +315,6 @@ class MoaStage(MoaBase, Widget):
         if parent is not None:
             parent.step_stage(source=self)
         return False
-
-    def _service_queue(self, dt):
-        while 1:
-            try:
-                f, largs, kwargs = self._schedule_queue.popleft()
-            except IndexError:
-                return
-
-            f(*largs, **kwargs)
 
     def _do_stage_timeout(self, *l):
         if (self.max_duration > 0. and time.clock() - self.start_time +
