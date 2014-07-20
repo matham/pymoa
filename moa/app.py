@@ -82,7 +82,7 @@ class MoaApp(App):
 
             if 'name' in root_state:
                 del root_state['name']
-            stage.recover(root_state)
+            stage.recover_state(root_state)
 
             if not len(state) or not len(state[0]):
                 if not len(stage.stages):
