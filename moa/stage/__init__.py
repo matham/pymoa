@@ -26,7 +26,12 @@ class MoaStage(MoaBase, Widget):
         self.size_hint = None, None
         self.size = 0, 0
         super(MoaStage, self).__init__(**kwargs)
+        self.canvas = None
         self._pause_list = []
+
+    # don't allow accessing canvas that was set to none
+    def on_opacity(self, instance, value):
+        pass
 
     def get_state(self, state=None):
         if state is None:
