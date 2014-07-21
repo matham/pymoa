@@ -1,10 +1,11 @@
 
 
-__all__ = ('GateStage', )
+__all__ = ('GateStage', 'DigitalGateStage', 'AnalogGateStage')
 
 
 from kivy.properties import (BooleanProperty, StringProperty,
-    BoundedNumericProperty, ObjectProperty)
+    BoundedNumericProperty, ObjectProperty, NumericProperty,
+    ReferenceListProperty)
 from kivy.clock import Clock
 from time import clock
 from moa.stage import MoaStage
@@ -12,7 +13,10 @@ from moa.stage import MoaStage
 
 class GateStage(MoaStage):
 
-    _last_state = None
+    last_state = None
+    ''' Gets reset to None before starting. Gets assigned the value after a
+    check.
+    '''
     _start_hold_time = None
 
     def _hold_timeout(self, *largs):
@@ -28,14 +32,12 @@ class GateStage(MoaStage):
             Clock.schedule_once(self._hold_timeout, t - elapsed)
 
     def _port_callback(self, instance, value):
-        last_val = self._last_state
-        self._last_state = value
-        exit_state = self.exit_state
+        last_val = self.last_state
+        self.last_state = value
         if last_val == value:
             return
 
-        if value == exit_state and (self.use_initial or
-                                    last_val is not None):
+        if self.check_exit(value, last_val):
             t = self.hold_time
             if t:
                 self._start_hold_time = clock()
@@ -65,7 +67,7 @@ class GateStage(MoaStage):
             if device is None:
                 raise AttributeError('A device has not been assigned to this '
                                      'stage, {}'.format(self))
-            self._last_state = None
+            self.last_state = None
             device.activate(self)
             device.bind(**{self.state_attr: self._port_callback})
             self._port_callback(device, getattr(device, self.state_attr))
@@ -91,11 +93,14 @@ class GateStage(MoaStage):
         if not super(GateStage, self).step_stage(*largs, **kwargs):
             return False
 
-        self._last_state = None
+        self.last_state = None
         device.activate(self)
         device.bind(**{self.state_attr: self._port_callback})
         return (self._port_callback(device, getattr(device, self.state_attr))
                 is not False)
+
+    def check_exit(self, value, last_val):
+        pass
 
     device = ObjectProperty(None, allownone=True)
     '''The input device.
@@ -105,15 +110,34 @@ class GateStage(MoaStage):
     ''' The name of the attr in device to bind.
     '''
 
-    exit_state = BooleanProperty(False)
-    '''The state the device has to be on in order to exit from this stage.
-    '''
-
     hold_time = BoundedNumericProperty(0, min=0)
     ''' How long the state must be held to finish.
+    '''
+
+
+class DigitalGateStage(MoaStage):
+
+    def check_exit(self, value, last_val):
+        return value == self.state and (self.use_initial or
+                                    last_val is not None)
+
+    state = BooleanProperty(False)
+    '''The state the device has to be on in order to exit from this stage.
     '''
 
     use_initial = BooleanProperty(True)
     ''' Whether we can complete the stage if when entering, the channel is
     already at this exit_state.
     '''
+
+
+class AnalogGateStage(MoaStage):
+
+    def check_exit(self, value, last_val):
+        return self.min <= value <= self.max
+
+    max = NumericProperty(0)
+
+    min = NumericProperty(0)
+
+    range = ReferenceListProperty(min, max)
