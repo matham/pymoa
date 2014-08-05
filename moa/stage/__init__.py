@@ -176,6 +176,7 @@ class MoaStage(MoaBase, Widget):
         self.loop_done = False
         self.finishing = False
         self._loop_finishing = False
+        self.timed_out = False
         if recurse:
             for child in self.stages[:]:
                 child.clear(recurse)
@@ -240,6 +241,8 @@ class MoaStage(MoaBase, Widget):
             logger.error('Ignored step_stage (source={}) on finished '
                          'stage'.format(source))
             return False
+        elif self.max_duration > 0.:
+            Clock.unschedule(self._do_stage_timeout)
 
         # decide if this loop iteration is done
         if source is self and not start:
@@ -326,9 +329,8 @@ class MoaStage(MoaBase, Widget):
         return False
 
     def _do_stage_timeout(self, *l):
-        if (self.max_duration > 0. and time.clock() - self.start_time +
-            self.elapsed_time >= self.max_duration):
-            self.stop()
+        self.timed_out = True
+        self.stop()
 
     def __repr__(self):
         if self.finished:
@@ -375,6 +377,10 @@ class MoaStage(MoaBase, Widget):
     max_duration = BoundedNumericProperty(0, min=0)
     '''If non zero, the total duration that this stage goes on. Including
     the loops.
+    '''
+
+    timed_out = BooleanProperty(False)
+    ''' If max_duration timed out.
     '''
 
     order = OptionProperty('serial', options=['serial', 'parallel'])
