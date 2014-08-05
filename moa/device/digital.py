@@ -51,7 +51,7 @@ class ButtonPort(DigitalPort):
         setattr(self, self._inverse_map[instance], value == 'down')
 
     def activate(self, *largs, **kwargs):
-        if super(ButtonChannel, self).activate(*largs, **kwargs):
+        if super(ButtonPort, self).activate(*largs, **kwargs):
             for attr, button in self.mapping.items():
                 button.bind(state=self._update_state)
                 setattr(self, attr, button.state == 'down')
@@ -59,7 +59,7 @@ class ButtonPort(DigitalPort):
         return False
 
     def deactivate(self, *largs, **kwargs):
-        if super(ButtonChannel, self).deactivate(*largs, **kwargs):
+        if super(ButtonPort, self).deactivate(*largs, **kwargs):
             for button in self._inverse_map:
                 button.unbind(state=self._update_state)
             return True
