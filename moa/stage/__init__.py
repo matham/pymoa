@@ -129,7 +129,7 @@ class MoaStage(MoaBase, Widget):
         self.start_time = time.clock()
         if self.max_duration > 0.:
             Clock.schedule_once(self._do_stage_timeout, max(0.,
-            self.max_duration - self.elapsed_time))
+            self.max_duration - self.elapsed_time), priority=True)
         if recurse:
             for child in self._pause_list:
                 if child.paused:
@@ -204,6 +204,9 @@ class MoaStage(MoaBase, Widget):
         state should be completed.
 
         This ignores if we're paused.
+
+        there is one entrance (here) and two exists (stop, and here). Exit code
+        should be in both exists.
         '''
 
         children = self.stages[:]
@@ -227,7 +230,8 @@ class MoaStage(MoaBase, Widget):
             self.start_time = time.clock()
             self.started = True
             if not self.paused and self.max_duration > 0.:
-                Clock.schedule_once(self._do_stage_timeout, self.max_duration)
+                Clock.schedule_once(self._do_stage_timeout, self.max_duration,
+                                    priority=True)
         elif not self.started and source is not self:
             logger.warning('Ignored step_stage for source {}, because'
                            ' stage is not started'.format(source))
@@ -407,6 +411,9 @@ class MoaStage(MoaBase, Widget):
 
     finished = BooleanProperty(False)
     ''' Set to True whenever the stage ended (forced or normal).
+    don't step stage on finished, because it's already done from step_stage
+    that set finished.
+    Some finishing code may execute after setting finished.
     '''
 
     paused = BooleanProperty(False)
