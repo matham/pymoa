@@ -30,7 +30,7 @@ class Device(MoaBase):
         else:
             try:
                 active.remove(identifier)
-            except ValueError:
+            except KeyError:
                 pass
 
         return bool(old_len and not len(active))
