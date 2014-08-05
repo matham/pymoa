@@ -115,13 +115,13 @@ class GateStage(MoaStage):
     '''
 
 
-class DigitalGateStage(MoaStage):
+class DigitalGateStage(GateStage):
 
     def check_exit(self, value, last_val):
-        return value == self.state and (self.use_initial or
-                                    last_val is not None)
+        return value == self.exit_state and (self.use_initial or
+                                             last_val is not None)
 
-    state = BooleanProperty(False)
+    exit_state = BooleanProperty(False)
     '''The state the device has to be on in order to exit from this stage.
     '''
 
@@ -131,7 +131,7 @@ class DigitalGateStage(MoaStage):
     '''
 
 
-class AnalogGateStage(MoaStage):
+class AnalogGateStage(GateStage):
 
     def check_exit(self, value, last_val):
         return self.min <= value <= self.max
