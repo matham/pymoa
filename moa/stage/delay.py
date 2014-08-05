@@ -17,7 +17,7 @@ class Delay(MoaStage):
     def __init__(self, **kwargs):
         super(Delay, self).__init__(**kwargs)
         self._delay_step_trigger = Clock.create_trigger(lambda dt:
-                                                        self.step_stage())
+            self.step_stage(), priority=True)
 
     def pause(self, *largs, **kwargs):
         if super(Delay, self).pause(*largs, **kwargs):
