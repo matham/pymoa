@@ -29,7 +29,7 @@ class GateStage(MoaStage):
             device.unbind(**{self.state_attr: self._port_callback})
             self.step_stage()
         else:
-            Clock.schedule_once(self._hold_timeout, t - elapsed)
+            Clock.schedule_once(self._hold_timeout, t - elapsed, priority=True)
 
     def _port_callback(self, instance, value):
         last_val = self.last_state
@@ -41,7 +41,7 @@ class GateStage(MoaStage):
             t = self.hold_time
             if t:
                 self._start_hold_time = clock()
-                Clock.schedule_once(self._hold_timeout, t)
+                Clock.schedule_once(self._hold_timeout, t, priority=True)
             else:
                 device = self.device
                 device.deactivate(self)
