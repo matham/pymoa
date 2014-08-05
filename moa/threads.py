@@ -5,12 +5,14 @@ __all__ = ('CallbackDeque', 'CallbackQueue', 'ScheduledEventLoop')
 
 from collections import defaultdict, deque
 from threading import RLock, Event, Thread
-from kivy.clock import Clock
+import traceback
 try:
     from Queue import Queue
 except ImportError:
     from queue import Queue
 import sys
+
+from kivy.clock import Clock
 
 
 class CallbackDeque(deque):
@@ -115,7 +117,8 @@ class ScheduledEventLoop(object):
         self.__callback_lock = RLock()
         self.__thread_event = Event()
         self.__callbacks = defaultdict(list)
-        self._kivy_trigger = Clock.create_trigger(self._service_kivy_thread)
+        self._kivy_trigger = Clock.create_trigger(self._service_kivy_thread,
+                                                  priority=True)
         self.target = target
         self.start_thread()
 
@@ -234,62 +237,65 @@ class ScheduledEventLoop(object):
         trigger = self._kivy_trigger
         handler = self.handle_exception
 
-        while 1:
-            event.wait()
-            if self.__signal_exit:
-                break
-            has_events = False
-            aquire()
-            keys = callbacks.keys()
-            event.clear()
-            release()
-            for key in keys:
-                cb = callbacks[key]
-                c = list(cb)
-                for ev in c:
-                    if self.__signal_exit:
-                        self.__thread = None
-                        return
-                    if not ev.trigger or ev.completed or ev not in cb:
-                        continue
+        try:
+            while 1:
+                event.wait()
+                if self.__signal_exit:
+                    break
+                has_events = False
+                aquire()
+                keys = callbacks.keys()
+                event.clear()
+                release()
+                for key in keys:
+                    cb = callbacks[key]
+                    c = list(cb)
+                    for ev in c:
+                        if self.__signal_exit:
+                            self.__thread = None
+                            return
+                        if not ev.trigger or ev.completed or ev not in cb:
+                            continue
 
-                    target = self.target
-                    if target is None:
-                        f = getattr(self, key)
-                    else:
-                        if hasattr(self, key):
+                        target = self.target
+                        if target is None:
                             f = getattr(self, key)
                         else:
-                            f = getattr(target, key)
+                            if hasattr(self, key):
+                                f = getattr(self, key)
+                            else:
+                                f = getattr(target, key)
 
-                    try:
-                        failed = retry = None
-                        res = f(**ev.func_kwargs)
-                    except Exception as e:
-                        failed = True
-                        import traceback
-                        retry = handler((e, traceback.format_exc()), ev)
-                        skip = False
-                        while retry:
-                            try:
-                                if ev not in cb:
-                                    skip = True
-                                    break
-                                res = f(**ev.func_kwargs)
-                                failed = retry = None
-                            except Exception as e:
-                                failed = True
-                                retry = bool(handler((e, sys.exc_info()), ev))
-                        if skip:
-                            continue
-                    if failed:
-                        self.__thread = None
-                        return
+                        try:
+                            failed = retry = None
+                            res = f(**ev.func_kwargs)
+                        except Exception as e:
+                            failed = True
+                            retry = handler((e, traceback.format_exc()), ev)
+                            skip = False
+                            while retry:
+                                try:
+                                    if ev not in cb:
+                                        skip = True
+                                        break
+                                    res = f(**ev.func_kwargs)
+                                    failed = retry = None
+                                except Exception as e:
+                                    failed = True
+                                    retry = bool(handler((e, sys.exc_info()),
+                                                         ev))
+                            if skip:
+                                continue
+                        if failed:
+                            self.__thread = None
+                            return
 
-                    if ev.repeat:
-                        has_events = True
-                    if schedule(key, (res, ev.func_kwargs), c, cb, ev):
-                        trigger()
-            if has_events or self.__signal_exit:
-                event.set()
+                        if ev.repeat:
+                            has_events = True
+                        if schedule(key, (res, ev.func_kwargs), c, cb, ev):
+                            trigger()
+                if has_events or self.__signal_exit:
+                    event.set()
+        except Exception as e:
+            handler((e, traceback.format_exc()), None)
         self.__thread = None
