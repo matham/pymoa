@@ -6,9 +6,13 @@ __all__ = ('MoaBase', )
 
 
 from weakref import ref
+from re import match, compile
 from kivy.event import EventDispatcher
 from kivy.properties import StringProperty, OptionProperty, ObjectProperty
 import logging
+
+var_pat = compile('[_A-Za-z][_a-zA-Z0-9]*$')
+
 
 
 class MoaBase(EventDispatcher):
@@ -33,6 +37,9 @@ class MoaBase(EventDispatcher):
                 del named_moas[old_name]
 
             if value:
+                if match(var_pat, value) is None:
+                    raise ValueError('"{}" is not a valid moa name. A valid '
+                    'name is similar to a python variable name'.format(value))
                 if value in named_moas and named_moas[value]() is not None:
                     raise ValueError('Moa instance with name {} already '
                         'exists: {}'.format(value, named_moas[value]()))
