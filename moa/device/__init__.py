@@ -13,9 +13,14 @@ class Device(MoaBase):
         self._activated_set = set()
 
     def activate(self, identifier, **kwargs):
+        '''identifier is hashable.
+        '''
         active = self._activated_set
         result = len(active) == 0
         active.add(identifier)
+        self.add_log(message='activating device', cause='activate',
+                     vals=('identifier', identifier, 'already_active',
+                           not result))
         return result
 
     def recover(self, **kwargs):
@@ -33,4 +38,7 @@ class Device(MoaBase):
             except KeyError:
                 pass
 
-        return bool(old_len and not len(active))
+        result = bool(old_len and not len(active))
+        self.add_log(message='deactivating device', cause='deactivate',
+                     vals=('identifier', identifier, 'deactivating', result))
+        return result

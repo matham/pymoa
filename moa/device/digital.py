@@ -42,6 +42,8 @@ class ButtonChannel(DigitalChannel):
         return False
 
     def set_state(self, state, **kwargs):
+        self.add_log(message='setting state', cause='set_state',
+                     vals=('state', state))
         self.button.state = 'down' if state else 'normal'
 
 
@@ -66,6 +68,8 @@ class ButtonPort(DigitalPort):
         return False
 
     def set_state(self, high=[], low=[], **kwargs):
+        self.add_log(message='setting state', cause='set_state',
+                     vals=('high', high, 'low', low))
         mapping = self.mapping
         for attr in high:
             mapping[attr].state = 'down'
