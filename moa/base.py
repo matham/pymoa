@@ -6,13 +6,18 @@ __all__ = ('MoaBase', )
 
 
 from weakref import ref
+import logging
 from re import match, compile
 from kivy.event import EventDispatcher
 from kivy.properties import StringProperty, OptionProperty, ObjectProperty
-import logging
+from moa.logger import Logger, LOG_LEVELS
 
 var_pat = compile('[_A-Za-z][_a-zA-Z0-9]*$')
 
+
+def pair_iterable(vals):
+    for i in range(0, len(vals), 2):
+            yield vals[i:i + 2]
 
 
 class MoaBase(EventDispatcher):
@@ -25,6 +30,7 @@ class MoaBase(EventDispatcher):
     _last_name = ''
 
     def __init__(self, **kwargs):
+        kwargs.setdefault('logger', Logger)
         super(MoaBase, self).__init__(**kwargs)
 
         def verfiy_name(instance, value):
@@ -50,13 +56,24 @@ class MoaBase(EventDispatcher):
         self.bind(name=verfiy_name)
         verfiy_name(self, self.name)
 
+    def add_log(self, level='debug', message='', cause='', vals=(), attrs=()):
+        logger = self.logger
+        if logger is None or logger.getEffectiveLevel() > LOG_LEVELS[level]:
+            return
+        name = self.name
+        if not name:
+            name = self.__class__.__name__
+
+        f = getattr(logger, level)
+        f('{},{},"{}",{}'.format(name, cause, message, ','.join(['{}: {}'.
+            format(attr, val) for attr, val in tuple(pair_iterable(vals))])))
+        if __debug__ and attrs:
+            logger.trace('{},{} - trace,"",{}'.format(name, cause, ','.
+                join(['{}: {}'.
+                format(attr, getattr(self, attr)) for attr in attrs])))
+
     name = StringProperty('')
     ''' Unique name across all Moa objects
     '''
 
-    logger = ObjectProperty(logging.getLogger('moa'),
-                            baseclass=logging.Logger)
-
-    source = StringProperty('')
-    ''' E.g. a filename to load that interpreted by the subclass.
-    '''
+    logger = ObjectProperty(None, baseclass=logging.Logger, allownone=True)
