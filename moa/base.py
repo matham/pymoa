@@ -8,6 +8,7 @@ __all__ = ('MoaBase', )
 from weakref import ref
 import logging
 from re import match, compile
+from functools import partial
 from kivy.event import EventDispatcher
 from kivy.properties import StringProperty, OptionProperty, ObjectProperty
 from moa.logger import Logger, LOG_LEVELS
@@ -15,9 +16,16 @@ from moa.logger import Logger, LOG_LEVELS
 var_pat = compile('[_A-Za-z][_a-zA-Z0-9]*$')
 
 
-def pair_iterable(vals):
+def _pair_iterable(vals):
     for i in range(0, len(vals), 2):
             yield vals[i:i + 2]
+
+
+def _moa_destructor(name, *l):
+    named_moas = MoaBase.named_moas
+    print 'destruct', name, l
+    if name in named_moas and named_moas[name]() is None:
+        del named_moas[name]
 
 
 class MoaBase(EventDispatcher):
@@ -50,7 +58,8 @@ class MoaBase(EventDispatcher):
                     raise ValueError('Moa instance with name {} already '
                         'exists: {}'.format(value, named_moas[value]()))
                 else:
-                    named_moas[value] = ref(self)
+                    named_moas[value] = ref(self, partial(_moa_destructor,
+                                                          value))
             self._last_name = value
 
         self.bind(name=verfiy_name)
@@ -66,7 +75,7 @@ class MoaBase(EventDispatcher):
 
         f = getattr(logger, level)
         f('{},{},"{}",{}'.format(name, cause, message, ','.join(['{}: {}'.
-            format(attr, val) for attr, val in tuple(pair_iterable(vals))])))
+            format(attr, val) for attr, val in tuple(_pair_iterable(vals))])))
         if __debug__ and attrs:
             logger.trace('{},{} - trace,"",{}'.format(name, cause, ','.
                 join(['{}: {}'.
