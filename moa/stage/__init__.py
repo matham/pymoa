@@ -171,23 +171,25 @@ class MoaStage(MoaBase, Widget):
         if value:
             self.stop()
 
-    def clear(self, recurse=False, **kwargs):
+    def clear(self, recurse=False, loop=False, **kwargs):
         '''Clears started etc. stops running if running.
         '''
-        if self.started and not self.finished:
+        if not loop and self.started and not self.finished:
             self.add_log(level='warning', message='Clearing unfinished stage, '
                 'may lead to state corruption', cause='clear',
                 vals=('started', self.started, 'finished', self.finished))
 
-        self.finished = False
-        self.started = False
-        self.count = 0
-        self.elapsed_time = 0.
-        self.start_time = 0.
-        self.loop_done = False
-        self.finishing = False
         self._loop_finishing = False
+        self.loop_done = False
         self.timed_out = False
+
+        if not loop:
+            self.finished = False
+            self.started = False
+            self.count = 0
+            self.elapsed_time = 0.
+            self.start_time = 0.
+            self.finishing = False
         if recurse:
             for child in self.stages[:]:
                 child.clear(recurse)
@@ -331,7 +333,7 @@ class MoaStage(MoaBase, Widget):
                         vals=('count', self.count))
                 for child in children:
                     child.clear()
-                self.loop_done = self._loop_finishing = False
+                self.clear(loop=True)
                 t = time.clock()
                 self.elapsed_time += t - self.start_time
                 self.start_time = t
