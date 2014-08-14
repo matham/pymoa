@@ -11,7 +11,7 @@ def to_bool(val):
     '''
     Takes anything and converts it to a bool type.
     '''
-    if val == 'False':
+    if val == 'False' or val == '0':
         return False
     return not not val
 
