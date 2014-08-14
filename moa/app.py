@@ -17,7 +17,7 @@ from moa.compat import decode_dict, PY2
 
 class MoaApp(App):
 
-    root_stage = ObjectProperty(None)
+    root_stage = ObjectProperty(None, allownone=True)
     ''' The root stage.
     '''
 
