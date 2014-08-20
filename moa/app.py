@@ -26,7 +26,8 @@ class MoaApp(App):
     When crashing, recovery is saved here
     '''
 
-    def save_state(self, stage=None, save_unnamed=False, prefix=''):
+    def save_state(self, stage=None, save_unnamed=False, prefix='',
+                   dir=''):
         '''
         Walks the stages starting with stage and dumps the states to a json
         file.
@@ -48,8 +49,9 @@ class MoaApp(App):
                 state.append(children)
             return state
 
-        fh, fn = tempfile.mkstemp(suffix='.mrec', prefix=prefix,
-            dir=path.abspath(path.expanduser(self.data_directory)))
+        dir = dir if path.isdir(dir) else \
+            path.abspath(path.expanduser(self.data_directory))
+        fh, fn = tempfile.mkstemp(suffix='.mrec', prefix=prefix, dir=dir)
         os.close(fh)
         with open(fn, 'w') as fh:
             json.dump(walk_stages(stage), fh, indent=2, sort_keys=True,
