@@ -21,6 +21,10 @@ class DigitalPort(Port):
 
 
 class ButtonChannel(DigitalChannel):
+    '''You can change the button's state and it'll be reflected in state.
+    To change state and have it reflected in the button, you have to call
+    set_state.
+    '''
 
     button = ObjectProperty(None)
 
