@@ -123,7 +123,7 @@ class ScheduledEventLoop(object):
         self.start_thread()
 
     def clear_events(self):
-        self.__callbacks = defaultdict(list)
+        self.__callbacks.clear()
 
     def start_thread(self):
         '''
