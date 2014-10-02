@@ -21,6 +21,9 @@ class MoaStage(MoaBase, Widget):
     we paused do not have to be unpaused.
     '''
     _loop_finishing = False
+    # whether this loop iteratioon is force stopped. loop_done is true only
+    # the stage loop itelf completed, but maybe not the substages.
+    # when this is true, the substages are force stopped.
 
     def __init__(self, **kwargs):
         self.size_hint = None, None
@@ -157,6 +160,7 @@ class MoaStage(MoaBase, Widget):
 
         # all children were stopped, so we can stop now
         Clock.unschedule(self._do_stage_timeout)
+        self.stopped = True
         if stage:
             self.finishing = True
         else:
@@ -184,6 +188,7 @@ class MoaStage(MoaBase, Widget):
         self.timed_out = False
 
         if not loop:
+            self.stopped = False
             self.finished = False
             self.started = False
             self.count = 0
@@ -449,6 +454,10 @@ class MoaStage(MoaBase, Widget):
     don't step stage on finished, because it's already done from step_stage
     that set finished.
     Some finishing code may execute after setting finished.
+    '''
+
+    stopped = BooleanProperty(False)
+    '''Whether the stage was stopped early, or if it naturally completed.
     '''
 
     paused = BooleanProperty(False)
