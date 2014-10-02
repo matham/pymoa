@@ -202,7 +202,9 @@ class MoaStage(MoaBase, Widget):
 
     def get_skip_stage(self):
         ''' If True, when step_stage is called, it must continue the chain,
-        even if not actually started.
+        even if not actually started. It is important, that this method does
+        not modify the state. I.e. calling this method twice in series
+        should return the same value.
         '''
         return self.disabled
 
@@ -234,6 +236,7 @@ class MoaStage(MoaBase, Widget):
         order = self.order
         if source is None:
             source = self
+        # if we should start this stage
         start = (not self.started or self.finished) and source is self
         add_log = self.add_log
 
@@ -266,73 +269,79 @@ class MoaStage(MoaBase, Widget):
                     message='ignored because stage is finished',
                     cause='step_stage', vals=('source', source))
             return False
-        elif self.max_duration > 0.:
-            Clock.unschedule(self._do_stage_timeout)
 
         # decide if this loop iteration is done
         if source is self and not start:
             self.loop_done = True
         loop_done = self.loop_done
-        done = self._loop_finishing = (self.finishing or self._loop_finishing
-            or (comp_type == 'any' and
-            (not comp_list or (loop_done and self in comp_list) or
-             any([c.finished and not c.get_skip_stage() for c in comp_list])))
+        # if this loop should be terminated and increment count
+        done = self._loop_finishing = (
+            self.finishing or self._loop_finishing or (
+            comp_type == 'any' and (not comp_list or (loop_done and self in comp_list) or
+            any([c.finished and not c.get_skip_stage() for c in comp_list])))
             or (comp_type == 'all' and
             ((comp_list and all([(c.finished or c.get_skip_stage()) and
-                                 c is not self
-            or c is self and loop_done for c in comp_list]))
+                                 c != self
+            or c == self and loop_done for c in comp_list]))
             or (not comp_list and (not children and loop_done or children and
             all([c.finished or c.get_skip_stage() for c in children]))))))
 
         add_log(cause='step_stage', vals=('source', source, 'done', done,
                                           'loop_done', loop_done))
         i = None
-        # if we need to finish, stop all the children
+        # if we need to finish loop, stop all the children and ourself
+        # (just the loop, not stage)
         if done:
             for child in children:
                 if child.stop():
                     return False
+            # in case child initiated completion, so we did not finish loop
             if not loop_done:
                 self.stop(stage=False)
                 return False
         elif not start:
-            # if parallel, all should be started so just wait until we done
-            if order == 'parallel':
+            # loop not done, so decide if need to start next child, or wait
+            # for self/substage to complete.
+
+            # if self is responsible and it's not done there's nothing to do
+            # or if parallel, all children should be started already
+            if source is self or order == 'parallel':
                 return False
-            # if serial see if there's a next child to start, otherwise wait to
-            # finish
-            else:
-                # if we don't need to finish, find the first not started child
-                for k in range(len(children)):
-                    child = children[k]
-                    if not child.get_skip_stage() and not child.finished:
-                        # if a child is already running we cannot proceed
-                        if child.started:
-                            return False
-                        else:
-                            i = k
-                            break
 
-                # if we didn't find a child to start, then just wait
-                if i is not None:
-                    for child in children[i:]:
-                        if not child.get_skip_stage():
-                            child.step_stage()
-                            return False
-                        add_log(cause='step_stage', message='skipping starting'
-                                ' next serial child: {}'.format(child))
+            # when serial see if there's a next child to start
+            for k in range(len(children)):
+                child = children[k]
+                if not child.get_skip_stage() and not child.finished:
+                    # if a child is already running we cannot proceed
+                    if child.started:
+                        add_log('warning', message='Could not start next child'
+                                '; this code should not have been reached')
+                        return False
+                    else:
+                        i = k
+                        break
 
-                add_log('warning', message='Could not start a child; this '
-                        'code should not have been reached')
-                # if no child was started, we may now need to finish
-                if not loop_done:
-                    return False
+            if i is not None:
+                for child in children[i:]:
+                    if not child.get_skip_stage():
+                        child.step_stage()
+                        return False
+                    add_log(cause='step_stage', message='skipping starting'
+                            ' next serial child: {}'.format(child))
 
-        # if we reached here then either start or (loop_done and all children
-        # are done)
+            if not loop_done:
+                return False
+
+            # if child becomes disabled between when we computed done and now
+            # then we may end up here and the loop may need to be ended.
+            add_log('warning', message='Could not start a child; this '
+                    'code should not have been reached')
+            # if not loop_done:
+            return False
+
+        # if we reached here then either start or loop and children are done
         if not self.finishing and (start or self.repeat == -1 or
-            self.count + (0 if start else 1) < self.repeat):
-
+                                   self.count + 1 < self.repeat):
             if not start:
                 add_log(cause='step_stage', message='incrementing count',
                         vals=('count', self.count))
@@ -354,6 +363,8 @@ class MoaStage(MoaBase, Widget):
                     child.step_stage()
             return True
 
+        if self.max_duration > 0.:
+            Clock.unschedule(self._do_stage_timeout)
         add_log(cause='step_stage', message='finishing stage')
         self.finished = True
         parent = self.parent
