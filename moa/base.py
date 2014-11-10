@@ -62,8 +62,8 @@ class MoaBase(EventDispatcher):
                                                           value))
             self._last_name = value
 
-        self.bind(name=verfiy_name)
-        verfiy_name(self, self.name)
+        #self.bind(name=verfiy_name)
+        #verfiy_name(self, self.name)
 
     def add_log(self, level='debug', message='', cause='', vals=(), attrs=()):
         logger = self.logger
