@@ -6,6 +6,7 @@ __all__ = ('AnalogChannel', 'AnalogPort', 'NumericPropertyChannel',
 from kivy.properties import NumericProperty, ObjectProperty, StringProperty
 from moa.device.port import Channel, Port
 from functools import partial
+from time import clock
 
 
 class AnalogChannel(Channel):
@@ -28,6 +29,7 @@ class NumericPropertyChannel(AnalogChannel):
     prop_name = StringProperty('')
 
     def _update_state(self, instance, value):
+        self.timestamp = clock()
         self.state = value
 
     def activate(self, *largs, **kwargs):
@@ -57,6 +59,7 @@ class NumericPropertyPort(AnalogPort):
     _widget_callbacks = []
 
     def _update_state(self, attr, instance, value):
+        self.timestamp = clock()
         setattr(self, attr, value)
 
     def activate(self, *largs, **kwargs):

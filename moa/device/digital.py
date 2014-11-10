@@ -4,6 +4,7 @@ __all__ = ('DigitalChannel', 'DigitalPort', 'ButtonChannel', 'ButtonPort')
 
 from kivy.properties import BooleanProperty, ObjectProperty
 from moa.device.port import Channel, Port
+from time import clock
 
 
 class DigitalChannel(Channel):
@@ -29,6 +30,7 @@ class ButtonChannel(DigitalChannel):
     button = ObjectProperty(None)
 
     def _update_state(self, instance, value):
+        self.timestamp = clock()
         self.state = value == 'down'
 
     def activate(self, *largs, **kwargs):
@@ -54,6 +56,7 @@ class ButtonChannel(DigitalChannel):
 class ButtonPort(DigitalPort):
 
     def _update_state(self, instance, value):
+        self.timestamp = clock()
         setattr(self, self._inverse_map[instance], value == 'down')
 
     def activate(self, *largs, **kwargs):
