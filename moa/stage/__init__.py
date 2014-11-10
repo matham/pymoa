@@ -122,7 +122,7 @@ class MoaStage(MoaBase, Widget):
                 # only pause children not yet paused
                 if not child.paused:
                     child.pause()
-                    pause_list.append(child)
+                    pause_list.append(child.proxy_ref)
         return True
 
     def unpause(self, recurse=True):
@@ -141,8 +141,11 @@ class MoaStage(MoaBase, Widget):
             self.max_duration - self.elapsed_time), priority=True)
         if recurse:
             for child in self._pause_list:
-                if child.paused:
-                    child.unpause()
+                try:
+                    if child.paused:
+                        child.unpause()
+                except ReferenceError:
+                    pass
         self._pause_list = []
         return True
 
