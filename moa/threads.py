@@ -174,6 +174,13 @@ class ScheduledEventLoop(object):
     is executed, the main thread receives the results of the execution and
     calls a callback with the results.
 
+    :Parameters:
+
+        `target`: object
+            See :attr:`target`
+        `daemon`: bool
+            See :attr:`_daemon`. Defaults to False.
+
     For example::
 
         from moa.threads import ScheduledEventLoop
@@ -243,6 +250,9 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
     _kivy_trigger = None
     '''A kivy Clock trigger telling the kivy thread to execute the callbacks.
     '''
+    _daemon = False
+    '''Whether the internal thread is a daemon thread.
+    '''
     target = None
     '''An object, the methods of which will be executed in the internal thread.
     :meth:`request_callback` requests a method to be executed. The method
@@ -250,8 +260,9 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
     or a method of the object in target.
     '''
 
-    def __init__(self, target=None, **kwargs):
+    def __init__(self, target=None, daemon=False, **kwargs):
         super(ScheduledEventLoop, self).__init__(**kwargs)
+        self._daemon = daemon
         self.__callback_lock = RLock()
         self.__thread_event = Event()
         self.__callbacks = defaultdict(list)
@@ -290,8 +301,9 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
             return
         self.__signal_exit = False
         self.__thread_event.set()
-        self.__thread = Thread(target=self._callback_thread,
-                               name='ScheduledEventLoop')
+        self.__thread = Thread(
+            target=self._callback_thread, name='ScheduledEventLoop')
+        self.__thread.daemon = self._daemon
         self.__thread.start()
 
     def stop_thread(self, join=False):
