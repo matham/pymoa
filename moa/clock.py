@@ -1,12 +1,86 @@
+'''Clock module similar to :kivy:class:`~kivy.clock`. It provides a `Clock`
+object used to schedule callbacks with the kivy Clock.
+
+In addition to the normal kivy Clock methods, one can also schedule priority
+events which should be executed immediately and is not frame rate limited.
+
+In order to use this clock, one must call :func:`set_clock` before doing
+anything kivy related (except e.g. importing kivy and other modules that
+don't schedule any kivy callbacks).
+
+For example using this definition::
+
+    from moa.clock import set_clock
+    set_clock('moa')
+
+    from kivy.app import runTouchApp
+    from kivy.uix.widget import Widget
+    from kivy.clock import Clock
+    from time import clock
+
+    class Events(Widget):
+
+        trigger = None
+        t = clock()
+
+        def __init__(self, priority=False, **kwargs):
+            super(Events, self).__init__(**kwargs)
+            if priority:
+                self.trigger = Clock.create_trigger_priority(self.callback, \
+timeout=0.001)
+            else:
+                self.trigger = Clock.create_trigger(self.callback, timeout=0.001)
+            self.trigger()
+
+        def callback(self, *l):
+            t = clock()
+            print 'fps', 1 / (t - self.t)
+            self.t = t
+            self.trigger()
+
+Running `runTouchApp(Events())` prints::
+
+    ...
+    fps 76.9822032559
+    fps 77.0284665992
+    fps 50.6727424053
+    fps 76.7734938999
+    fps 62.4892743508
+    fps 71.3713146943
+    ...
+
+Running `runTouchApp(Events(priority=True))` prints::
+
+    ...
+    fps 780.305030439
+    fps 831.739071038
+    fps 900.640532544
+    fps 891.083790706
+    fps 887.511661808
+    fps 903.31305638
+    ...
+
+'''
 from __future__ import absolute_import
 
+__all__ = ('PriorityClockEvent', )
+
 from threading import Event
+import kivy
 from kivy.clock import ClockBase, ClockEvent, _default_time, _hash
+from kivy.clock import Clock as KivyClock
+from kivy.context import register_context
+from functools import partial
 
 
 class PriorityClockEvent(ClockEvent):
+    '''Similar to :kivy:class:`~kivy.clock.ClockEvent`, except the event
+    might have priority and then its execution is not frame rate limited.
+    '''
 
     priority = False
+    '''Whether this event's execution is frame rate limited.
+    '''
 
     def __init__(self, priority, clock, loop, callback, timeout, starttime,
                  cid, trigger=False):
@@ -35,6 +109,12 @@ class PriorityClockEvent(ClockEvent):
 
 
 class MoaClockBase(ClockBase):
+    '''Similar to :kivy:class:`~kivy.clock.ClockBase`, except the clock allows
+    events which may have priority and then their execution is not frame rate
+    limited.
+
+    To schedule a priority event call the `xxx_priority` methods.
+    '''
 
     _sleep_event = None
     MIN_SLEEP = 0.005
@@ -102,25 +182,56 @@ class MoaClockBase(ClockBase):
 
         return self._dt
 
-    def create_trigger(self, callback, timeout=0, priority=False):
-        ev = PriorityClockEvent(priority, self, False, callback, timeout, 0,
+    def create_trigger(self, callback, timeout=0):
+        ev = PriorityClockEvent(False, self, False, callback, timeout, 0,
                                 _hash(callback))
         ev.release()
         return ev
 
-    def schedule_once(self, callback, timeout=0, priority=False):
+    def schedule_once(self, callback, timeout=0):
         if not callable(callback):
             raise ValueError('callback must be a callable, got %s' % callback)
-        event = PriorityClockEvent(priority, self, False, callback, timeout,
-            _default_time() if priority else self._last_tick,
+        event = PriorityClockEvent(False, self, False, callback, timeout,
+            self._last_tick,
             _hash(callback), True)
         return event
 
-    def schedule_interval(self, callback, timeout, priority=False):
+    def schedule_interval(self, callback, timeout):
         if not callable(callback):
             raise ValueError('callback must be a callable, got %s' % callback)
-        event = PriorityClockEvent(priority, self, True, callback, timeout,
-            _default_time() if priority else self._last_tick,
+        event = PriorityClockEvent(False, self, True, callback, timeout,
+            self._last_tick,
+            _hash(callback), True)
+        return event
+
+    def create_trigger_priority(self, callback, timeout=0):
+        '''Similar to :kivy:meth:`~kivy.clock.ClockBase.create_trigger`,
+        except the created event has priority.
+        '''
+        ev = PriorityClockEvent(True, self, False, callback, timeout, 0,
+                                _hash(callback))
+        ev.release()
+        return ev
+
+    def schedule_once_priority(self, callback, timeout=0):
+        '''Similar to :kivy:meth:`~kivy.clock.ClockBase.schedule_once`,
+        except the created event has priority.
+        '''
+        if not callable(callback):
+            raise ValueError('callback must be a callable, got %s' % callback)
+        event = PriorityClockEvent(True, self, False, callback, timeout,
+            _default_time(),
+            _hash(callback), True)
+        return event
+
+    def schedule_interval_priority(self, callback, timeout):
+        '''Similar to :kivy:meth:`~kivy.clock.ClockBase.schedule_interval`,
+        except the created event has priority.
+        '''
+        if not callable(callback):
+            raise ValueError('callback must be a callable, got %s' % callback)
+        event = PriorityClockEvent(True, self, True, callback, timeout,
+            _default_time(),
             _hash(callback), True)
         return event
 
@@ -134,3 +245,37 @@ class MoaClockBase(ClockBase):
                         event.tick(clock(), remove)
                     elif not priority:
                         event.tick(last_tick, remove)
+
+
+def set_clock(clock='kivy'):
+    '''Sets whether the main kivy Clock (:kivy:attr:`~kivy.clock.Clock`) and
+    :attr:`~moa.clock.Clock` will use the default Kivy clock or the moa clock
+    with available priority (:class:`~moa.clock.MoaClockBase`). If the default
+    kivy clock is used, the `xxx_priority` methods map to the normal methods.
+
+    This method must be called before any kivy modules that may schedule
+    callbacks or use the clock are imported/called.
+
+    By default, once the :mod:`~moa.clock` is imported, the kivy
+    :kivy:attr:`~kivy.clock.Clock` gets priority methods, which are mapped
+    to the normal methods.
+
+    See module for examples.
+    '''
+    if clock not in ('kivy', 'moa'):
+        raise Exception('Clock "{}" not recognized'.format(clock))
+
+    Clock = ClockBase if clock == 'kivy' else MoaClockBase
+    kivy.clock.Clock = globals()['Clock'] = Clock = \
+        register_context('Clock', Clock)
+
+    if clock == 'kivy':
+        Clock.create_trigger_priority = Clock.create_trigger
+        Clock.schedule_once_priority = Clock.schedule_once
+        Clock.schedule_interval_priority = Clock.schedule_interval
+
+
+Clock = KivyClock
+Clock.create_trigger_priority = Clock.create_trigger
+Clock.schedule_once_priority = Clock.schedule_once
+Clock.schedule_interval_priority = Clock.schedule_interval

@@ -12,8 +12,7 @@ except ImportError:
     from queue import Queue
 import sys
 
-from kivy.clock import Clock
-from moa.clock import MoaClockBase
+from moa.clock import Clock
 
 
 class CallbackDeque(deque):
@@ -266,12 +265,8 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
         self.__callback_lock = RLock()
         self.__thread_event = Event()
         self.__callbacks = defaultdict(list)
-        if isinstance(Clock, MoaClockBase):
-            self._kivy_trigger = Clock.create_trigger(
-                self._service_main_thread, priority=True)
-        else:
-            self._kivy_trigger = Clock.create_trigger(
-                self._service_main_thread)
+        self._kivy_trigger = Clock.create_trigger_priority(
+            self._service_main_thread)
         self.target = target
         self.start_thread()
 

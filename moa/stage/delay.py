@@ -4,10 +4,10 @@ __all__ = ('Delay', )
 
 import random
 import time
-from kivy.clock import Clock
 from kivy.properties import (OptionProperty, BoundedNumericProperty,
     ReferenceListProperty)
 from moa.stage import MoaStage
+from moa.clock import Clock
 
 
 class Delay(MoaStage):
@@ -16,8 +16,8 @@ class Delay(MoaStage):
 
     def __init__(self, **kwargs):
         super(Delay, self).__init__(**kwargs)
-        self._delay_step_trigger = Clock.create_trigger(lambda dt:
-            self.step_stage(), priority=True)
+        self._delay_step_trigger = Clock.create_trigger_priority(
+            lambda dt: self.step_stage())
 
     def pause(self, *largs, **kwargs):
         if super(Delay, self).pause(*largs, **kwargs):

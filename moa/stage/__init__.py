@@ -5,12 +5,12 @@ TODO: when completion_type is any, save the one that initiated the stop
 __all__ = ('MoaStage', )
 
 import time
-from kivy.clock import Clock
 from kivy.properties import (BooleanProperty, NumericProperty, StringProperty,
     OptionProperty, BoundedNumericProperty, ReferenceListProperty,
     ObjectProperty, ListProperty)
 from kivy.uix.widget import Widget
 from moa.base import MoaBase
+from moa.clock import Clock
 
 
 class MoaStage(MoaBase, Widget):
@@ -137,8 +137,8 @@ class MoaStage(MoaBase, Widget):
 
         self.start_time = time.clock()
         if self.max_duration > 0.:
-            Clock.schedule_once(self._do_stage_timeout, max(0.,
-            self.max_duration - self.elapsed_time), priority=True)
+            Clock.schedule_once_priority(self._do_stage_timeout, max(0.,
+            self.max_duration - self.elapsed_time))
         if recurse:
             for child in self._pause_list:
                 try:
@@ -260,8 +260,8 @@ class MoaStage(MoaBase, Widget):
                 add_log(cause='step_stage',
                         message='scheduling max_duration timeout',
                         vals=('max_duration', max_duration))
-                Clock.schedule_once(self._do_stage_timeout, max_duration,
-                                    priority=True)
+                Clock.schedule_once_priority(
+                    self._do_stage_timeout, max_duration)
         elif not self.started and source is not self:
             add_log(level='warning',
                     message='ignored because source not started',

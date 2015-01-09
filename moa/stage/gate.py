@@ -6,9 +6,9 @@ __all__ = ('GateStage', 'DigitalGateStage', 'AnalogGateStage')
 from kivy.properties import (BooleanProperty, StringProperty,
     BoundedNumericProperty, ObjectProperty, NumericProperty,
     ReferenceListProperty)
-from kivy.clock import Clock
 from time import clock
 from moa.stage import MoaStage
+from moa.clock import Clock
 
 
 class GateStage(MoaStage):
@@ -31,7 +31,7 @@ class GateStage(MoaStage):
             device.unbind(**{self.state_attr: self._port_callback})
             self.step_stage()
         else:
-            Clock.schedule_once(self._hold_timeout, t - elapsed, priority=True)
+            Clock.schedule_once_priority(self._hold_timeout, t - elapsed)
 
     def _port_callback(self, instance, value):
         last_val = self.last_state
@@ -46,7 +46,7 @@ class GateStage(MoaStage):
                 self.add_log(cause='_port_callback', vals=vals,
                              message='exit condition met - scheduling timeout')
                 self._start_hold_time = clock()
-                Clock.schedule_once(self._hold_timeout, t, priority=True)
+                Clock.schedule_once_priority(self._hold_timeout, t)
             else:
                 self.add_log(cause='_port_callback',
                              message='exit condition met', vals=vals)
