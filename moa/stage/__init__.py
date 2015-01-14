@@ -36,14 +36,14 @@ class MoaStage(MoaBase, Widget):
         # don't allow accessing canvas that was set to none
         pass
 
-    def get_state(self, state=None):
+    def get_attributes(self, state=None):
         if state is None:
             state = {}
         for attr in ('name', 'disabled', 'finished', 'paused', 'count'):
             state[attr] = getattr(self, attr)
         return state
 
-    def recover_state(self, state):
+    def recover_attributes(self, state):
         self.clear()
         for k, v in state.iteritems():
             setattr(self, k, v)
