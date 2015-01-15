@@ -1,3 +1,5 @@
+'''Module that provides helpful classes and functions.
+'''
 
 __all__ = ('to_bool', 'ConfigPropertyList', 'ConfigPropertyDict', 'StringList',
            'String2DList', 'StringDict')

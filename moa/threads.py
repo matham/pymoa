@@ -1,5 +1,7 @@
-from __future__ import absolute_import
+'''Threading module.
+'''
 
+from __future__ import absolute_import
 
 __all__ = ('CallbackDeque', 'CallbackQueue', 'ScheduledEventLoop')
 

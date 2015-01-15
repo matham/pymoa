@@ -1,4 +1,5 @@
-
+'''A framework for designing and running experiments in Python using Kivy.
+'''
 
 __version__ = '0.1-dev'
 

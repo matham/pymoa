@@ -1,4 +1,6 @@
-
+'''Modules to ease compatibility between different versions of python and
+types.
+'''
 
 __all__ = ('decode_dict', 'PY2', 'unicode_type', 'bytes_type')
 

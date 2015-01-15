@@ -12,6 +12,8 @@ valid_name_pat = compile('[_A-Za-z][_a-zA-Z0-9]*$')
 
 
 class MoaBase(MoaObjectLogger, EventDispatcher):
+    '''The class that is the base of many Moa classes.
+    '''
 
     def __init__(self, **kwargs):
         super(MoaBase, self).__init__(**kwargs)
