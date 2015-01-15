@@ -48,8 +48,6 @@ class NumericPropertyChannel(AnalogChannel):
         return False
 
     def set_state(self, state, **kwargs):
-        self.add_log(message='setting state', cause='set_state',
-                     vals=('state', state))
         setattr(self.channel_widget, self.prop_name, state)
 
 
@@ -84,8 +82,6 @@ class NumericPropertyPort(AnalogPort):
         return False
 
     def set_state(self, **kwargs):
-        self.add_log(message='setting state', cause='set_state',
-                     vals=('new_states', kwargs))
         mapping = self.mapping
         widget = self.channel_widget
         for attr, value in kwargs:

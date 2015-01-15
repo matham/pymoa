@@ -109,6 +109,9 @@ r.log_property_dispatch:138 height=10
         >>> wid.width = 50
         [DEBUG             ] [Moa         ] 2015-01-14 15:35:17,918 moa.logger\
 .log_property_dispatch:138 [widget wid] width=50
+        >>> wid.log('debug', 'hello {}', 'You')
+        [DEBUG             ] [Moa         ] 2015-01-14 16:34:41,226 moa.logger\
+.log:183 [widget wid] hello You
 
     '''
 
@@ -175,6 +178,18 @@ r.log_property_dispatch:138 height=10
         logger = self.logger
         if logger is not None:
             logger.debug(self.logged_pat.format('{}'.format(name)))
+
+    def log(self, level, msg, *largs, **kwargs):
+        '''A convenience method that formats the message according to
+        :attr:`logged_pat` and forwards it to :attr:`logger` if not None.
+        It functions similar to the Logger's `log` method (largs and kwargs
+        are ). See :class:`MoaObjectLogger` for an example.
+        '''
+        logger = self.logger
+        if logger is None:
+            return
+        getattr(logger, level)(self.logged_pat.format(
+            msg.format(*largs, **kwargs)))
 
     log_attrs_type = OptionProperty('include', options=['exclude', 'include'])
     '''Whether the :attr:`logged_attrs` list indicates the properties and to

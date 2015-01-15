@@ -18,9 +18,10 @@ class Device(MoaBase):
         active = self._activated_set
         result = len(active) == 0
         active.add(identifier)
-        self.add_log(message='activating device', cause='activate',
-                     vals=('identifier', identifier, 'already_active',
-                           not result))
+        if result:
+            self.log('debug', 'Activating with {}', identifier)
+        else:
+            self.log('debug', 'Activating skipped with {}', identifier)
         return result
 
     def recover(self, **kwargs):
@@ -39,6 +40,8 @@ class Device(MoaBase):
                 pass
 
         result = bool(old_len and not len(active))
-        self.add_log(message='deactivating device', cause='deactivate',
-                     vals=('identifier', identifier, 'deactivating', result))
+        if result:
+            self.log('debug', 'De-activating with {}', identifier)
+        else:
+            self.log('debug', 'De-activating skipped with {}', identifier)
         return result

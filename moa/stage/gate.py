@@ -22,8 +22,8 @@ class GateStage(MoaStage):
     def _hold_timeout(self, *largs):
         t = self.hold_time
         elapsed = clock() - self._start_hold_time
-        self.add_log(cause='_hold_timeout', vals=('hold_time', t, 'elapsed',
-                                                  elapsed))
+        self.log(
+            'debug', 'hold timeout elapsed={}, done={}', elapsed, t <= elapsed)
 
         if t <= elapsed:
             device = self.device
@@ -38,26 +38,25 @@ class GateStage(MoaStage):
         self.last_state = value
         if last_val == value:
             return
-        vals = ('last_state', last_val, 'new_state', value)
 
         if self.check_exit(value, last_val):
             t = self.hold_time
             if t:
-                self.add_log(cause='_port_callback', vals=vals,
-                             message='exit condition met - scheduling timeout')
+                self.log('debug', 'Exit condition met, oldval={}, newval={}. '
+                         'Starting timeout', last_val, value)
                 self._start_hold_time = clock()
                 Clock.schedule_once_priority(self._hold_timeout, t)
             else:
-                self.add_log(cause='_port_callback',
-                             message='exit condition met', vals=vals)
+                self.log('debug', 'Exit condition met, oldval={}, newval={}',
+                         last_val, value)
                 device = self.device
                 device.deactivate(self)
                 device.unbind(**{self.state_attr: self._port_callback})
                 self.step_stage()
                 return False
         else:
-            self.add_log(cause='_port_callback',
-                         message='exit state unmet', vals=vals)
+            self.log('debug', 'Exit condition unmet, oldval={}, newval={}',
+                     last_val, value)
             Clock.unschedule(self._hold_timeout)
 
     def pause(self, *largs, **kwargs):

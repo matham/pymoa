@@ -20,7 +20,7 @@ class MoaStage(MoaBase, Widget):
     after we ourself become unpaused. Children that were already paused when
     we paused do not have to be unpaused.
     '''
-    _loop_finishing = False
+    _loop_finishing = BooleanProperty(False)
     # whether this loop iteratioon is force stopped. loop_done is true only
     # the stage loop itelf completed, but maybe not the substages.
     # when this is true, the substages are force stopped.
@@ -108,10 +108,9 @@ class MoaStage(MoaBase, Widget):
         self.paused = True
 
         if self.disabled or not self.started or self.finished or paused:
-            self.add_log(cause='pause', message='ignored', attrs=('disabled',
-                'started', 'finished'))
+            self.log('debug', 'Pausing ignored')
             return False
-        self.add_log(cause='pause', vals=('recurse', recurse))
+        self.log('debug', 'Pausing recurse={}', recurse)
 
         # we paused so we need to pause the clock and save elapsed time
         self.elapsed_time += time.clock() - self.start_time
@@ -121,7 +120,7 @@ class MoaStage(MoaBase, Widget):
             for child in self.stages:
                 # only pause children not yet paused
                 if not child.paused:
-                    child.pause()
+                    child.pause(True)
                     pause_list.append(child.proxy_ref)
         return True
 
@@ -130,10 +129,9 @@ class MoaStage(MoaBase, Widget):
         self.paused = False
 
         if self.disabled or not self.started or self.finished or not paused:
-            self.add_log(cause='unpause', message='ignored', attrs=('disabled',
-                'started', 'finished'), vals=('paused', paused))
+            self.log('debug', 'Un-pausing ignored')
             return False
-        self.add_log(cause='unpause', vals=('recurse', recurse))
+        self.log('debug', 'Unpausing recurse={}', recurse)
 
         self.start_time = time.clock()
         if self.max_duration > 0.:
@@ -143,7 +141,7 @@ class MoaStage(MoaBase, Widget):
             for child in self._pause_list:
                 try:
                     if child.paused:
-                        child.unpause()
+                        child.unpause(True)
                 except ReferenceError:
                     pass
         self._pause_list = []
@@ -156,10 +154,9 @@ class MoaStage(MoaBase, Widget):
         When this is called with super, this instance loop_done is set to True.
         '''
         if not self.started or self.finished:
-            self.add_log(cause='stop', message='ignored', attrs=('started',
-                'finished'), vals=('stage', stage))
+            self.log('debug', 'Stopping ignored. Source stage={}', stage)
             return False
-        self.add_log(cause='stop', vals=('stage', stage))
+        self.log('debug', 'Stopping. Source stage={}', stage)
 
         # all children were stopped, so we can stop now
         Clock.unschedule(self._do_stage_timeout)
@@ -174,7 +171,6 @@ class MoaStage(MoaBase, Widget):
     def on_disabled(self, instance, value, **kwargs):
         ''' Dispatch.
         '''
-        self.add_log(cause='disabled', vals=('disabled', value))
         if value:
             self.stop()
 
@@ -182,9 +178,8 @@ class MoaStage(MoaBase, Widget):
         '''Clears started etc. stops running if running.
         '''
         if not loop and self.started and not self.finished:
-            self.add_log(level='warning', message='Clearing unfinished stage, '
-                'may lead to state corruption', cause='clear',
-                vals=('started', self.started, 'finished', self.finished))
+            self.log('warning', 'Clearing unfinished stage, may lead to state '
+                     'corruption')
 
         self._loop_finishing = False
         self.loop_done = False
@@ -241,14 +236,13 @@ class MoaStage(MoaBase, Widget):
             source = self
         # if we should start this stage
         start = (not self.started or self.finished) and source is self
-        add_log = self.add_log
+        log = self.log
 
         if start:
             if self.get_skip_stage():
-                add_log(cause='step_stage', message='skip starting stage '
-                        'because of get_skip_stage')
+                log('debug', 'Step stage start skipped with get_skip_stage()')
                 return False
-            add_log(cause='step_stage', message='starting stage')
+            log('debug', 'Step stage, starting stage')
             self.clear()
             for child in children:
                 child.clear()
@@ -257,21 +251,18 @@ class MoaStage(MoaBase, Widget):
             self.started = True
             max_duration = self.max_duration
             if not self.paused and max_duration > 0.:
-                add_log(cause='step_stage',
-                        message='scheduling max_duration timeout',
-                        vals=('max_duration', max_duration))
                 Clock.schedule_once_priority(
                     self._do_stage_timeout, max_duration)
         elif not self.started and source is not self:
-            add_log(level='warning',
-                    message='ignored because source not started',
-                    cause='step_stage', vals=('source', source))
+            log('warning', 'Step stage ignored because not started and source '
+                'is not self. source={}', source)
             return False
         elif self.finished:
-            add_log(level='error',
-                    message='ignored because stage is finished',
-                    cause='step_stage', vals=('source', source))
+            log('error', 'Step stage ignored because already finished. '
+                'source={}', source)
             return False
+        else:
+            log('debug', 'Step stage with source={}', source)
 
         # decide if this loop iteration is done
         if source is self and not start:
@@ -289,8 +280,6 @@ class MoaStage(MoaBase, Widget):
             or (not comp_list and (not children and loop_done or children and
             all([c.finished or c.get_skip_stage() for c in children]))))))
 
-        add_log(cause='step_stage', vals=('source', source, 'done', done,
-                                          'loop_done', loop_done))
         i = None
         # if we need to finish loop, stop all the children and ourself
         # (just the loop, not stage)
@@ -317,8 +306,8 @@ class MoaStage(MoaBase, Widget):
                 if not child.get_skip_stage() and not child.finished:
                     # if a child is already running we cannot proceed
                     if child.started:
-                        add_log('warning', message='Could not start next child'
-                                '; this code should not have been reached')
+                        log('warning', 'Could not start next child ({})'
+                            '; this code should not have been reached', child)
                         return False
                     else:
                         i = k
@@ -329,16 +318,16 @@ class MoaStage(MoaBase, Widget):
                     if not child.get_skip_stage():
                         child.step_stage()
                         return False
-                    add_log(cause='step_stage', message='skipping starting'
-                            ' next serial child: {}'.format(child))
+                    log('debug', 'skipping starting next serial child ({})',
+                        child)
 
             if not loop_done:
                 return False
 
             # if child becomes disabled between when we computed done and now
             # then we may end up here and the loop may need to be ended.
-            add_log('warning', message='Could not start a child; this '
-                    'code should not have been reached')
+            log('warning', 'Could not start a child; this code should not '
+                'have been reached')
             # if not loop_done:
             return False
 
@@ -346,8 +335,6 @@ class MoaStage(MoaBase, Widget):
         if not self.finishing and (start or self.repeat == -1 or
                                    self.count + 1 < self.repeat):
             if not start:
-                add_log(cause='step_stage', message='incrementing count',
-                        vals=('count', self.count))
                 for child in children:
                     child.clear()
                 self.clear(loop=True)
@@ -368,7 +355,6 @@ class MoaStage(MoaBase, Widget):
 
         if self.max_duration > 0.:
             Clock.unschedule(self._do_stage_timeout)
-        add_log(cause='step_stage', message='finishing stage')
         self.finished = True
         parent = self.parent
         if parent is not None:
@@ -376,7 +362,6 @@ class MoaStage(MoaBase, Widget):
         return False
 
     def _do_stage_timeout(self, *l):
-        self.add_log(cause='max_duration', message='timed out')
         self.timed_out = True
         self.stop()
 
