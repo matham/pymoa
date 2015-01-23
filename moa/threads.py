@@ -181,6 +181,8 @@ class ScheduledEventLoop(object):
             See :attr:`target`
         `daemon`: bool
             See :attr:`_daemon`. Defaults to False.
+        `cls_method`: bool
+            See :attr:`cls_method`. Defaults to True.
 
     For example::
 
@@ -260,10 +262,18 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
     can be a method of a class co-inherited from :class:`ScheduledEventLoop`,
     or a method of the object in target.
     '''
+    cls_method = True
+    '''If a callback scheduled with :meth:`request_callback` when `cls_method`
+    is None is to be executed for :meth:`request_callback` parameter `name`
+    belonging to to :class:`ScheduledEventLoop` (True), or to
+    :meth:`ScheduledEventLoop.target` (False).
+    '''
 
-    def __init__(self, target=None, daemon=False, **kwargs):
+    def __init__(self, target=None, daemon=False, cls_method=True,
+                 **kwargs):
         super(ScheduledEventLoop, self).__init__(**kwargs)
         self._daemon = daemon
+        self.cls_method = cls_method
         self.__callback_lock = RLock()
         self.__thread_event = Event()
         self.__callbacks = defaultdict(list)
@@ -341,7 +351,7 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
         pass
 
     def request_callback(self, name, callback=None, trigger=True,
-                         repeat=False, cls_method=True, **kwargs):
+                         repeat=False, cls_method=None, **kwargs):
         '''Adds a callback to be executed by the internal thread.
         See :class:`ScheduledEvent`.
 
@@ -364,7 +374,10 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
             `repeat`: bool
                 See :attr:`ScheduledEvent.repeat`.
             `cls_method`: bool or None
-                See :attr:`ScheduledEvent.cls_method`.
+                See :attr:`ScheduledEvent.cls_method`. As opposed to
+                :attr:`ScheduledEvent.cls_method`, this parameter can also be
+                None, in which case :attr:`cls_method` will be used
+                instead. It defaults to None.
             `**kwargs`:
                 The caught keyword arguments that will be passed to the method
                 `name`. See :attr:`ScheduledEvent.func_kwargs`.
@@ -377,6 +390,8 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
             necessarily the order in which the internal thread will execute
             them.
         '''
+        if cls_method is None:
+            cls_method = self.cls_method
         ev = ScheduledEvent(
             callback=callback, func_kwargs=kwargs, repeat=repeat,
             trigger=trigger, cls_method=cls_method, name=name)
