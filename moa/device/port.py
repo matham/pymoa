@@ -75,8 +75,19 @@ class ChannelBase(Device):
     '''
 
     def set_state(self, **kwargs):
-        '''A abstract class for setting the state. See :class:`ChannelBase` for
+        '''A abstract method for setting the state. See :class:`ChannelBase` for
         details.
+
+        .. note::
+            If supported, the method needs to be overwritten by a base class
+            otherwise, it raises a `NotImplementedError`.
+        '''
+        raise NotImplementedError()
+
+    def get_state(self):
+        '''A abstract method causing a read of the state. This method should
+        not return the state, but rather cause the device to read the state
+        and update the appropriate instance property with the current state.
 
         .. note::
             If supported, the method needs to be overwritten by a base class
