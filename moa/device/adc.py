@@ -240,10 +240,12 @@ data_size=2, frequency=4, bit_depth=16)
         self._start_time = clock()
         f = self.data_size / float(self.frequency)
         Clock.schedule_interval(self._generate_data, f / 2.)
+        self.activation = 'active'
         return True
 
     def deactivate(self, *largs, **kwargs):
         if not super(VirtualADCPort, self).deactivate(*largs, **kwargs):
             return False
         Clock.unschedule(self._generate_data)
+        self.activation = 'inactive'
         return True

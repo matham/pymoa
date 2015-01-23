@@ -113,12 +113,14 @@ prop_name='value')
             prop = self.prop_name
             widget.bind(**{prop: self._update_state})
             self.state = getattr(widget, prop)
+            self.activation = 'active'
             return True
         return False
 
     def deactivate(self, *largs, **kwargs):
         if super(NumericPropertyChannel, self).deactivate(*largs, **kwargs):
             self.channel_widget.unbind(**{self.prop_name: self._update_state})
+            self.activation = 'inactive'
             return True
         return False
 
@@ -199,6 +201,7 @@ class NumericPropertyPort(AnalogPort):
                 callbacks.append({wid_attr: partial(f, attr)})
                 widget.bind(**callbacks[-1])
                 setattr(self, attr, getattr(widget, wid_attr))
+            self.activation = 'active'
             return True
         return False
 
@@ -208,6 +211,7 @@ class NumericPropertyPort(AnalogPort):
             for d in self._widget_callbacks:
                 widget.unbind(**d)
             self._widget_callbacks = []
+            self.activation = 'inactive'
             return True
         return False
 

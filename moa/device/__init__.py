@@ -1,7 +1,7 @@
 '''Device module for interfacing Moa with devices (e.g switches, ADC, etc.).
 '''
 
-from kivy.properties import BooleanProperty
+from kivy.properties import OptionProperty
 from moa.base import MoaBase
 
 
@@ -37,7 +37,7 @@ class Device(MoaBase):
     def activate(self, identifier, **kwargs):
         '''Called to activate the device.
 
-        The method is overwritten and called by inherited widgets to check
+        The method is overwritten and called by inherited devices to check
         whether the device is already active or the activation code should
         be executed.
 
@@ -54,11 +54,21 @@ class Device(MoaBase):
         active = self._activated_set
         result = len(active) == 0
         active.add(identifier)
+        activation = self.activation
         if result:
-            self.is_active = True
-            self.log('debug', 'Activating with {}', identifier)
+            if (activation != 'inactive' and activation != 'deactivating'):
+                self.log('warning', 'Activated but activation was {}',
+                         activation)
+            self.activation = 'activating'
+            self.log('debug', 'Activating with {}. State was previously {}',
+                     identifier, activation)
         else:
-            self.log('debug', 'Activating skipped with {}', identifier)
+            if activation == 'active' or activation == 'activating':
+                level = 'debug'
+            else:
+                level = 'warning'
+            self.log(level, 'Activating skipped with {}. State was '
+                     'previously {}', identifier, activation)
         return result
 
     def deactivate(self, identifier, clear=False, **kwargs):
@@ -100,6 +110,7 @@ class Device(MoaBase):
                 ...     if super(MyDevice, self).activate(identifier, \
 **kwargs):
                 ...         print('Activating with {}'.format(identifier))
+                ...         self.activation = 'active'
                 ...         return True
                 ...     print('Skipping activation with {}'.format(identifier))
                 ...     return False
@@ -108,6 +119,7 @@ class Device(MoaBase):
                 ...     if super(MyDevice, self).deactivate(identifier, \
 **kwargs):
                 ...         print('De-activating with {}'.format(identifier))
+                ...         self.activation = 'inactive'
                 ...         return True
                 ...     print('Skipping deactivation with {}'.\
 format(identifier))
@@ -137,17 +149,42 @@ format(identifier))
                 pass
 
         result = bool(old_len and not len(active))
+        activation = self.activation
         if result:
-            self.is_active = False
-            self.log('debug', 'De-activating with {}', identifier)
+            if (activation != 'active' and activation != 'activating'):
+                self.log('warning', 'Deactivated but activation was {}',
+                         activation)
+            self.activation = 'deactivating'
+            self.log('debug', 'Deactivating with {}. State was previously {}',
+                     identifier, activation)
         else:
-            self.log('debug', 'De-activating skipped with {}', identifier)
+            if activation == 'inactive' or activation == 'deactivating':
+                level = 'debug'
+            else:
+                level = 'warning'
+            self.log(level, 'Deactivating skipped with {}. State was '
+                     'previously {}', identifier, activation)
         return result
 
     def on_data_update(self, instance):
         pass
 
-    is_active = BooleanProperty(False)
-    '''Whether the device is currently active. Defaults to False.
-    See :meth:`activate`.
+    activation = OptionProperty('inactive', options=[
+        'active', 'inactive', 'activating', 'deactivating'])
+    '''The activity state of the device.
+
+    When :meth:`activate` is called and it wasn't already active,
+    :meth:`activate` sets it to `'activating'`. Similarly, when
+    :meth:`deactivate` is called and it wasn't already inactive,
+    :meth:`deactivate` sets it to `'deactivating'`. It is the responsibility of
+    the inherited class to set it to `'active'` or `'inactive'` when ready.
+
+    For inherited classes, both :meth:`activate` and :meth:`deactivate` may
+    return True when the device is either active/activating or
+    inactive/deactivating. For each, if one needs to distinugish between e.g.
+    activating and active one should check the value of this property.
+
+    :attr:`activation` is a :kivy:class:`~kivy.properties.OptionProperty`
+    and defaults to `'inactive'`. Allowed values are `'active'`, `'inactive'`,
+    `'activating'`, `'deactivating'`.
     '''
