@@ -5,7 +5,10 @@ It defines a :attr:`Config` class used to configure Moa.
 __all__ = ('Config', 'ConfigParser')
 
 from os import environ
+from os.path import isfile
+
 from kivy.config import ConfigParser as KivyConfigParser
+
 from moa.logger import logger_config_update
 from moa import moa_config_fn
 
@@ -43,7 +46,7 @@ if not environ.get('MOA_DOC_INCLUDE'):
     Config.add_callback(logger_config_update, 'moa', 'log_level')
 
     # Read config file if exist
-    if (exists(moa_config_fn) and
+    if (isfile(moa_config_fn) and
             'MOA_USE_DEFAULTCONFIG' not in environ and
             'MOA_NO_CONFIG' not in environ):
         try:
@@ -88,7 +91,7 @@ if not environ.get('MOA_DOC_INCLUDE'):
     Config.set('moa', 'config_version', MOA_CONFIG_VERSION)
 
     # If no configuration exist, write the default one.
-    if ((not exists(moa_config_fn) or need_save) and
+    if ((not isfile(moa_config_fn) or need_save) and
             'MOA_NO_CONFIG' not in environ):
         try:
             Config.filename = moa_config_fn
