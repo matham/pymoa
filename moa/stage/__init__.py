@@ -43,7 +43,7 @@ class MoaStage(StageBase):
 
     __metaclass__ = StageMetaclass
 
-    __dump_attrs__ = ('disabled', 'finished', 'paused', 'count')
+    __recovery_attrs__ = ('disabled', 'finished', 'paused', 'count')
 
     _cls_attrs = None
 
@@ -63,10 +63,10 @@ class MoaStage(StageBase):
         if cls_inst._cls_attrs is None:
             cls_inst._cls_attrs = attrs = []
             for cls in [cls_inst] + list(_get_bases(cls_inst)):
-                if not hasattr(cls, '__dump_attrs__'):
+                if not hasattr(cls, '__recovery_attrs__'):
                     continue
 
-                for attr in cls.__dump_attrs__:
+                for attr in cls.__recovery_attrs__:
                     if attr in attrs:
                         continue
                     if not hasattr(self, attr):

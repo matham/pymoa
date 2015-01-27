@@ -14,6 +14,8 @@ from moa.clock import Clock
 
 class Delay(MoaStage):
 
+    __recovery_attrs__ = ('delay', )
+
     _delay_step_trigger = None
 
     def __init__(self, **kwargs):
