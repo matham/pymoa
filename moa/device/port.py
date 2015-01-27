@@ -61,6 +61,10 @@ class ChannelBase(Device):
 
     .. note::
         Typically, when activating, the :attr:`timestamp` is not updated.
+
+    .. warning::
+        The :attr:`timestamp` may be derived from a device clock different than
+        e.g. the Moa clock. One needs to be aware of the timestamp source.
     '''
 
     reset_state = BooleanProperty(True)
