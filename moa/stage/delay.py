@@ -4,8 +4,10 @@ __all__ = ('Delay', )
 
 import random
 import time
+
 from kivy.properties import (OptionProperty, BoundedNumericProperty,
     ReferenceListProperty)
+
 from moa.stage import MoaStage
 from moa.clock import Clock
 
@@ -21,14 +23,14 @@ class Delay(MoaStage):
 
     def pause(self, *largs, **kwargs):
         if super(Delay, self).pause(*largs, **kwargs):
-            self.delay = max(0, self.delay - (time.clock() - self.start_time))
             self._delay_step_trigger.cancel()
             return True
         return False
 
     def unpause(self, *largs, **kwargs):
         if super(Delay, self).unpause(*largs, **kwargs):
-            self._delay_step_trigger.timeout = self.delay
+            self._delay_step_trigger.timeout = max(
+                0, self.delay - self.elapsed_time)
             self._delay_step_trigger()
             return True
         return False
