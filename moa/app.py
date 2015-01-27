@@ -7,6 +7,7 @@ import os
 from os import path
 import tempfile
 import json
+
 import kivy
 kivy.require('1.9.0')
 from kivy.properties import StringProperty, ObjectProperty
@@ -16,6 +17,7 @@ from kivy import resources
 
 import moa.factory_registers
 from moa.compat import decode_dict, PY2
+from moa.logger import Logger
 
 
 class MoaApp(App):
@@ -37,7 +39,7 @@ class MoaApp(App):
     '''
 
     recovery_directory = StringProperty(None, allownone=True)
-    '''The recovery directory to use with :meth:`save_attributes` if
+    '''The recovery directory to use with :meth:`dump_attributes` if
     not None. This is where recovery files are saved.
     '''
 
@@ -47,10 +49,10 @@ class MoaApp(App):
         Builder.load_file(path.join(path.dirname(__file__),
                                        'data', 'moa_style.kv'))
 
-    def save_attributes(self, stage=None, save_unnamed=False, prefix='',
+    def dump_attributes(self, stage=None, save_unnamed=False, prefix='',
                         dir=None):
         '''
-        Dumps the dict returned by :meth:`~moa.stage.MoaStage.get_attributes`
+        Dumps the dict returned by :meth:`~moa.stage.MoaStage.dump_attributes`
         for all the stages starting with and descending from `stage` into a
         uniquely named json file. The output file extension is `mrec`.
 
@@ -78,7 +80,7 @@ class MoaApp(App):
             >>> app = MoaApp()
             >>> stage = MoaStage(name='stage1')
             >>> stage.add_stage(MoaStage(name='child1'))
-            >>> app.save_attributes(stage, prefix='example_', dir='/')
+            >>> app.dump_attributes(stage, prefix='example_', dir='/')
             '/example_0wig2f.mrec'
 
         Its contents are::
@@ -130,7 +132,7 @@ class MoaApp(App):
                         [child2.2]],
                     ...]
             '''
-            state = [stage.get_state()]
+            state = [stage.dump_attributes()]
             children = []
             for child in stage.stages:
                 if child.name or save_unnamed:
@@ -149,10 +151,10 @@ class MoaApp(App):
                       encoding='utf-8')
         return fn
 
-    def recover_attributes(self, filename, stage=None, recover_unnamed=False,
+    def load_attributes(self, filename, stage=None, recover_unnamed=False,
                            verify_name=True):
         ''' Recovers the attributes from a json file created by
-        :meth:`save_attributes` and restores them to `stage` and it's children
+        :meth:`dump_attributes` and restores them to `stage` and it's children
         stages recursively.
 
         :Parameters:
@@ -173,6 +175,9 @@ class MoaApp(App):
                 .. note::
                     When False, the names are simply ignored and not restored.
 
+        .. note::
+            The stages are recovered and applied depth first, i.e starting with
+            the deepest children stages, and then moving upwards.
         '''
         if stage is None:
             stage = self.root_stage
@@ -189,6 +194,10 @@ class MoaApp(App):
             '''
             if not recover_unnamed and not stage.name:
                 return
+            if not len(state):
+                Logger.debug(
+                    "Cannot find recovery info for stage {}".format(stage))
+                return
             root_state = state.pop(0)
             if verify_name and root_state['name'] != stage.name:
                 raise Exception("Recovered, {}, and stage name, {}, are not "
@@ -196,19 +205,19 @@ class MoaApp(App):
 
             if 'name' in root_state:
                 del root_state['name']
-            stage.recover_attributes(root_state)
 
             if not len(state) or not len(state[0]):
-                if not len(stage.stages):
-                    return
-                raise Exception("Cannot find rules in the recovery file to "
-                "to apply to the children of {}".format(stage))
+                if len(stage.stages):
+                    Logger.debug(
+                        "Cannot find recovery info for children of {}".
+                        format(stage))
             elif len(stage.stages) != len(state[0]):
-                raise Exception("The number of children stages for {}, {},  "
-                "doesn't match the number of stages read, {}"
-                .format(stage, len(stage.stages), len(state[0])))
-
-            for i in range(len(state[0])):
-                apply_state(stage.stages[i], state[0][i])
+                raise Exception("The number of children stages ({}) for {},  "
+                "doesn't match the number of stages recovered ({})"
+                .format(len(stage.stages), stage, len(state[0])))
+            else:
+                for i in range(len(state[0])):
+                    apply_state(stage.stages[i], state[0][i])
+            stage.load_attributes(root_state)
 
         apply_state(stage, state)

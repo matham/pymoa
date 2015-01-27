@@ -62,7 +62,7 @@ class RecoveryTestCase(unittest.TestCase):
         clean_stage = RecoveryStage()
 
         app.root_stage = RecoveryStage()
-        app.recover_attributes(f_unnamed, verify_name=False)
+        app.load_attributes(f_unnamed, verify_name=False)
         self.assertEqual(root.b.count, app.root_stage.b.count)
         self.assertEqual(root.b.finished, app.root_stage.b.finished)
         self.assertEqual(clean_stage.d.count, app.root_stage.d.count)
@@ -71,7 +71,7 @@ class RecoveryTestCase(unittest.TestCase):
         self.assertNotEqual(root.d.finished, app.root_stage.d.finished)
 
         app.root_stage = RecoveryStage()
-        app.recover_attributes(f_named, verify_name=False)
+        app.load_attributes(f_named, verify_name=False)
         self.assertEqual(root.b.count, app.root_stage.b.count)
         self.assertEqual(root.b.finished, app.root_stage.b.finished)
         self.assertEqual(clean_stage.d.count, app.root_stage.d.count)
@@ -80,7 +80,7 @@ class RecoveryTestCase(unittest.TestCase):
         self.assertNotEqual(root.d.finished, app.root_stage.d.finished)
 
         app.root_stage = RecoveryStage()
-        app.recover_attributes(f_unnamed, recover_unnamed=True, verify_name=False)
+        app.load_attributes(f_unnamed, recover_unnamed=True, verify_name=False)
         self.assertEqual(root.b.count, app.root_stage.b.count)
         self.assertEqual(root.b.finished, app.root_stage.b.finished)
         self.assertNotEqual(clean_stage.d.count, app.root_stage.d.count)
@@ -89,7 +89,7 @@ class RecoveryTestCase(unittest.TestCase):
         self.assertEqual(root.d.finished, app.root_stage.d.finished)
 
         stage = RecoveryStage()
-        app.recover_attributes(f_named, stage=stage, recover_unnamed=True,
+        app.load_attributes(f_named, stage=stage, recover_unnamed=True,
                           verify_name=False)
         self.assertEqual(root.b.count, stage.b.count)
         self.assertEqual(root.b.finished, stage.b.finished)

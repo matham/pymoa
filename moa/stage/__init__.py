@@ -1,10 +1,11 @@
-''' largs is banned.
+'''
 TODO: when completion_type is any, save the one that initiated the stop
 '''
 
 __all__ = ('MoaStage', )
 
 import time
+
 from kivy.properties import (BooleanProperty, NumericProperty, StringProperty,
     OptionProperty, BoundedNumericProperty, ReferenceListProperty,
     ObjectProperty, ListProperty)
@@ -13,7 +14,36 @@ from moa.base import MoaBase
 from moa.clock import Clock
 
 
-class MoaStage(MoaBase, Widget):
+def _get_bases(cls):
+    for base in cls.__bases__:
+        if base.__name__ == 'object':
+            break
+        yield base
+        for cbase in _get_bases(base):
+            yield cbase
+
+
+class StageMetaclass(type):
+    '''Metaclass to automatically register new stage classes with the
+    :kivy:class:`~kivy.factory.Factory`.
+
+    .. warning::
+        This metaclass is used by MoaStage. Do not use it directly!
+    '''
+    def __init__(mcs, name, bases, attrs):
+        super(StageMetaclass, mcs).__init__(name, bases, attrs)
+        Factory.register(name, cls=mcs)
+
+StageBase = StageMetaclass('StageBase', (MoaBase, ), {})
+
+
+class MoaStage(StageBase):
+
+    __metaclass__ = StageMetaclass
+
+    __dump_attrs__ = ('disabled', 'finished', 'paused', 'count')
+
+    _cls_attrs = None
 
     _pause_list = []
     ''' The list of children we ourselves have paused and we need to unpause
@@ -26,27 +56,39 @@ class MoaStage(MoaBase, Widget):
     # when this is true, the substages are force stopped.
 
     def __init__(self, **kwargs):
-        self.size_hint = None, None
-        self.size = 0, 0
         super(MoaStage, self).__init__(**kwargs)
-        self.canvas = None
+        cls_inst = self.__class__
+        if cls_inst._cls_attrs is None:
+            cls_inst._cls_attrs = attrs = []
+            for cls in [cls_inst] + list(_get_bases(cls_inst)):
+                if not hasattr(cls, '__dump_attrs__'):
+                    continue
+
+                for attr in cls.__dump_attrs__:
+                    if attr in attrs:
+                        continue
+                    if not hasattr(self, attr):
+                        raise Exception('Missing attribute <{}> in <{}>'.
+                                        format(attr, cls_inst.__name__))
+                    attrs.append(attr)
         self._pause_list = []
 
-    def on_opacity(self, instance, value):
-        # don't allow accessing canvas that was set to none
-        pass
-
-    def get_attributes(self, state=None):
+    def dump_attributes(self, state=None):
+        attrs = self.__class__._cls_attrs
+        exclude = self.exclude_attrs
         if state is None:
             state = {}
-        for attr in ('name', 'disabled', 'finished', 'paused', 'count'):
-            state[attr] = getattr(self, attr)
+        for attr in attrs:
+            if attr not in exclude:
+                state[attr] = getattr(self, attr)
         return state
 
-    def recover_attributes(self, state):
+    def load_attributes(self, state):
+        exclude = self.exclude_attrs
         self.clear()
-        for k, v in state.iteritems():
-            setattr(self, k, v)
+        for attr, value in state.items():
+            if attr not in exclude:
+                setattr(self, attr, value)
 
     def add_widget(self, widget, index=None, **kwargs):
         if widget is self:
@@ -56,13 +98,13 @@ class MoaStage(MoaBase, Widget):
             self.add_stage(widget, index, **kwargs)
         elif not isinstance(widget, Widget):
             raise Exception('add_widget() can be used only with Widget '
-                            'or MoaStage classes.')
+                            'or MoaStage based classes.')
         else:
-            children = self.children
-            if index is None or index >= len(children):
-                children.append(widget)
-            else:
-                children.insert(widget, index)
+            if self.renderer is not None:
+                raise ValueError(
+                    'Stage already has renderer {}, cannot add {}'.
+                    format(self.renderer, widget))
+            self.renderer = widget.__self__
 
     def add_stage(self, stage, index=None, **kwargs):
         ''' Different than widget because of None.
@@ -77,9 +119,9 @@ class MoaStage(MoaBase, Widget):
         if parent:
             raise Exception('Cannot add {}, it already has a parent {}'.format(
                             stage, parent))
-        stage.parent = parent = self
+        stage.parent = self
         # child will be disabled if added to a disabled parent
-        if parent.disabled:
+        if self.disabled:
             stage.disabled = True
 
         if index is None or index >= len(stages):
@@ -90,11 +132,8 @@ class MoaStage(MoaBase, Widget):
     def remove_widget(self, widget, **kwargs):
         if isinstance(widget, MoaStage):
             self.remove_stage(widget, **kwargs)
-        else:
-            try:
-                self.children.remove(widget)
-            except ValueError:
-                pass
+        elif widget == self.renderer:
+            self.renderer = None
 
     def remove_stage(self, stage, **kwargs):
         try:
@@ -390,7 +429,7 @@ class MoaStage(MoaBase, Widget):
     and unset when the widget is removed from its parent.
     '''
 
-    stage_render = ObjectProperty(None, allownone=True)
+    renderer = ObjectProperty(None, allownone=True)
     ''' The class used to display and control this stage in the stage tree.
     When `None`, we walk the parent tree until we find one which is not `None`,
     or an error is raised.
@@ -398,6 +437,17 @@ class MoaStage(MoaBase, Widget):
     rule is applied. So from .py, either added as constructor argument,  or in
     constructor.
     '''
+
+    render_cls = ObjectProperty(None, allownone=True)
+    ''' The class used to display and control this stage in the stage tree.
+    When `None`, we walk the parent tree until we find one which is not `None`,
+    or an error is raised.
+    This cannot be set from kv, because the children are added before this
+    rule is applied. So from .py, either added as constructor argument,  or in
+    constructor.
+    '''
+
+    exclude_attrs = ListProperty([])
 
     repeat = BoundedNumericProperty(1, min=-1)
     ''' 1 is once, -1 is indefinitely.
