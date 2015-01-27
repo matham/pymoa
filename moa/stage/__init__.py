@@ -48,9 +48,9 @@ class MoaStage(StageBase):
     _cls_attrs = None
 
     _pause_list = []
-    ''' The list of children we ourselves have paused and we need to unpause
-    after we ourself become unpaused. Children that were already paused when
-    we paused do not have to be unpaused.
+    ''' The list of children this stage paused and we therefore need to unpause
+    them after this stage becomes unpaused. Children stages that were already
+    paused when the stage paused do not have to be unpaused.
     '''
     _loop_finishing = BooleanProperty(False)
     # whether this loop iteratioon is force stopped. loop_done is true only
@@ -239,7 +239,7 @@ class MoaStage(StageBase):
                 child.clear(recurse)
         return True
 
-    def get_skip_stage(self):
+    def skip_stage(self):
         ''' If True, when step_stage is called, it must continue the chain,
         even if not actually started. It is important, that this method does
         not modify the state. I.e. calling this method twice in series
@@ -280,8 +280,8 @@ class MoaStage(StageBase):
         log = self.log
 
         if start:
-            if self.get_skip_stage():
-                log('debug', 'Step stage start skipped with get_skip_stage()')
+            if self.skip_stage():
+                log('debug', 'Step stage start skipped with skip_stage()')
                 return False
             log('debug', 'Step stage, starting stage')
             self.clear()
@@ -313,13 +313,13 @@ class MoaStage(StageBase):
         done = self._loop_finishing = (
             self.finishing or self._loop_finishing or (
             comp_type == 'any' and (not comp_list or (loop_done and self in comp_list) or
-            any([c.finished and not c.get_skip_stage() for c in comp_list])))
+            any([c.finished and not c.skip_stage() for c in comp_list])))
             or (comp_type == 'all' and
-            ((comp_list and all([(c.finished or c.get_skip_stage()) and
+            ((comp_list and all([(c.finished or c.skip_stage()) and
                                  c != self
             or c == self and loop_done for c in comp_list]))
             or (not comp_list and (not children and loop_done or children and
-            all([c.finished or c.get_skip_stage() for c in children]))))))
+            all([c.finished or c.skip_stage() for c in children]))))))
 
         i = None
         # if we need to finish loop, stop all the children and ourself
@@ -344,7 +344,7 @@ class MoaStage(StageBase):
             # when serial see if there's a next child to start
             for k in range(len(children)):
                 child = children[k]
-                if not child.get_skip_stage() and not child.finished:
+                if not child.skip_stage() and not child.finished:
                     # if a child is already running we cannot proceed
                     if child.started:
                         log('warning', 'Could not start next child ({})'
@@ -356,7 +356,7 @@ class MoaStage(StageBase):
 
             if i is not None:
                 for child in children[i:]:
-                    if not child.get_skip_stage():
+                    if not child.skip_stage():
                         child.step_stage()
                         return False
                     log('debug', 'skipping starting next serial child ({})',
@@ -386,7 +386,7 @@ class MoaStage(StageBase):
 
             if order == 'serial':
                 for child in children:
-                    if not child.get_skip_stage():
+                    if not child.skip_stage():
                         child.step_stage()
                         break
             else:
