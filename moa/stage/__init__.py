@@ -10,6 +10,8 @@ from kivy.properties import (BooleanProperty, NumericProperty, StringProperty,
     OptionProperty, BoundedNumericProperty, ReferenceListProperty,
     ObjectProperty, ListProperty)
 from kivy.uix.widget import Widget
+from kivy.lang import Factory
+
 from moa.base import MoaBase
 from moa.clock import Clock
 
