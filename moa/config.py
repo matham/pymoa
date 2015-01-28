@@ -9,11 +9,11 @@ from os.path import isfile
 
 from kivy.config import ConfigParser as KivyConfigParser
 
-from moa.logger import logger_config_update
+from moa.logger import logger_config_update, Logger
 from moa import moa_config_fn
 
 # Version number of current configuration format
-MOA_CONFIG_VERSION = 0
+MOA_CONFIG_VERSION = 1
 
 Config = None
 '''Moa configuration object. Its kivy::attr:`~kivy.config.ConfigParser.name` is

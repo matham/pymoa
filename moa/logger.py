@@ -1,9 +1,11 @@
 '''The Moa logger module provides a logger class that is forwarded to kivy.
 It creates a base logger with name `moa` from which all moa logger are derived.
 
-Logs that pass the filter and are emitted by the moa logger, are forwarded to
-the kivy logger and emitted based on kivy's log level. Therefore, both the moa
-and kivy logger must be configured to the correct level for emission.
+.. note::
+    Logs that pass the filter and are emitted by the moa logger, are forwarded
+    to the kivy logger and emitted based on kivy's log level. Therefore, both
+    the moa and kivy logger must be configured to the correct level for
+    emission.
 
 For example::
 
