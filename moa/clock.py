@@ -6,12 +6,14 @@ events which should be executed immediately and is not frame rate limited.
 
 In order to use this clock, one must call :func:`set_clock` before doing
 anything kivy related (except e.g. importing kivy and other modules that
-don't schedule any kivy callbacks).
+don't schedule any kivy callbacks). This is accomplished by setting the
+environmental variable of `MOA_CLOCK` to `'1'` and then importing moa.
 
 For example using this definition::
 
-    from moa.clock import set_clock
-    set_clock('moa')
+    from os import environ
+    environ['MOA_CLOCK'] = '1'
+    import moa
 
     from kivy.app import runTouchApp
     from kivy.uix.widget import Widget
@@ -254,7 +256,9 @@ def set_clock(clock='kivy'):
     kivy clock is used, the `xxx_priority` methods map to the normal methods.
 
     This method must be called before any kivy modules that may schedule
-    callbacks or use the clock are imported/called.
+    callbacks or use the clock are imported/called. Setting it through the
+    environment variable `MOA_CLOCK` is currently the only way to ensure the
+    moa clock will work correctly.
 
     By default, once the :mod:`~moa.clock` is imported, the kivy
     :kivy:attr:`~kivy.clock.Clock` gets priority methods, which are mapped
