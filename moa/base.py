@@ -8,7 +8,7 @@ from weakref import proxy
 from functools import partial
 
 from kivy.event import EventDispatcher
-from kivy.properties import StringProperty
+from kivy.properties import StringProperty, DictProperty
 from kivy.lang import Builder
 
 from moa.logger import MoaObjectLogger
@@ -73,6 +73,8 @@ class MoaBase(MoaObjectLogger, EventDispatcher):
     '''Similar to :kivy:attr:`~kivy.uix.widget.Widget.cls`, except it is not
     currently used and remains here for kv compatibility.
     '''
+
+    ids = DictProperty({})
 
     def __init__(self, **kwargs):
         super(MoaBase, self).__init__(**kwargs)
