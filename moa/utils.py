@@ -4,9 +4,10 @@
 __all__ = ('to_bool', 'ConfigPropertyList', 'ConfigPropertyDict', 'StringList',
            'String2DList', 'StringDict')
 
-from kivy.properties import ConfigParserProperty
 from re import compile, split
 from copy import deepcopy
+
+from kivy.properties import ConfigParserProperty
 
 to_list_pat = compile('(?:, *)?\\n?')
 to_dict_pat = compile('(?:: *)?\\n?')
@@ -173,8 +174,10 @@ fruit'], 'Attrs', 'vals_str', 'my_app', val_type=str)
     def to_list(val):
         if isinstance(val, list):
             vals = StringList(val)
-        else:
+        elif isinstance(val, basestring):
             vals = StringList(split(to_list_pat, val.strip(' []()')))
+        else:
+            vals = StringList([val])
         for i, v in enumerate(vals):
             vals[i] = val_type(v)
         return vals
@@ -182,9 +185,11 @@ fruit'], 'Attrs', 'vals_str', 'my_app', val_type=str)
     def to_2d_list(val):
         if isinstance(val, list):
             vals = String2DList(deepcopy(val))
-        else:
+        elif isinstance(val, basestring):
             vals = String2DList([split(to_list_pat, line.strip(' []()'))
                                  for line in val.strip(' []()').splitlines()])
+        else:
+            vals = StringList([[val]])
         for i, line in enumerate(vals):
             for j, v in enumerate(line):
                 vals[i][j] = val_type(v)
