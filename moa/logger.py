@@ -27,13 +27,15 @@ For example::
 
 __all__ = ('Logger', 'MoaObjectLogger')
 
-from kivy.logger import Logger as KivyLogger
-from kivy.logger import LOG_LEVELS
-
-from kivy.properties import (
-    ObjectProperty, ListProperty, OptionProperty, StringProperty)
 import logging
 from functools import partial
+import sys
+import os
+
+from kivy.logger import Logger as KivyLogger
+from kivy.logger import LOG_LEVELS
+from kivy.properties import (
+    ObjectProperty, ListProperty, OptionProperty, StringProperty)
 
 
 def logger_config_update(section, key, value):
@@ -45,15 +47,61 @@ def logger_config_update(section, key, value):
     Logger.setLevel(level=LOG_LEVELS.get(value))
 
 
+# next bit filched from logging.py
+if hasattr(sys, 'frozen'): #support for py2exe
+    _srcfile = "logging%s__init__%s" % (os.sep, __file__[-4:])
+elif __file__[-4:].lower() in ['.pyc', '.pyo']:
+    _srcfile = __file__[:-4] + '.py'
+else:
+    _srcfile = __file__
+_srcfile = os.path.normcase(_srcfile)
+
+def currentframe():
+    """Return the frame object for the caller's stack frame."""
+    try:
+        raise Exception
+    except:
+        return sys.exc_info()[2].tb_frame.f_back
+
+if hasattr(sys, '_getframe'): currentframe = lambda: sys._getframe(3)
+# done filching
+
+
 class _MoaLoggerBase(logging.Logger):
     '''Moa logger class which optimizes emissions by initially checking whether
-    the kivy logger is enabled for this level.
+    the kivy logger is enabled for this level. This Logger is only created for
+    Loggers with names that starts with `moa`.
     '''
 
     def isEnabledFor(self, lvl):
+        if not self.name.startswith('moa'):
+            return super(_MoaLoggerBase, self).isEnabledFor(lvl)
         if super(_MoaLoggerBase, self).isEnabledFor(lvl):
             return KivyLogger.isEnabledFor(lvl)
         return False
+
+    def findCaller(self):
+        """
+        Find the stack frame of the caller so that we can note the source
+        file name, line number and function name.
+        """
+        if not self.name.startswith('moa'):
+            return super(_MoaLoggerBase, self).findCaller()
+        f = currentframe()
+        #On some versions of IronPython, currentframe() returns None if
+        #IronPython isn't run with -X:Frames.
+        if f is not None:
+            f = f.f_back
+        rv = "(unknown file)", 0, "(unknown function)"
+        while hasattr(f, "f_code"):
+            co = f.f_code
+            filename = os.path.normcase(co.co_filename)
+            if filename == _srcfile:
+                f = f.f_back
+                continue
+            rv = (co.co_filename, f.f_lineno, co.co_name)
+            break
+        return rv
 
 
 class KivyHandler(logging.Handler):
@@ -70,11 +118,11 @@ logging.setLoggerClass(_MoaLoggerBase)
 Logger = logging.getLogger('moa')
 '''The `moa` logger instance.
 '''
-logging.setLoggerClass(_orig_cls)
+#logging.setLoggerClass(_orig_cls)
 Logger.trace = partial(Logger.log, logging.TRACE)
 _kivyhandler = KivyHandler()
 _kivyhandler.setFormatter(logging.Formatter(
-    '%(asctime)s %(name)s.%(funcName)s:%(lineno)d %(message)s'))
+    '%(asctime)s %(pathname)s:%(funcName)s:%(lineno)d %(message)s'))
 Logger.addHandler(_kivyhandler)
 
 
@@ -90,6 +138,13 @@ class MoaObjectLogger(object):
 
     For example::
 
+        >>> # first allow debug emissions
+        >>> from moa.logger import Logger
+        >>> from kivy.logger import Logger as KivyLogger
+        >>> import logging
+        >>> Logger.setLevel(logging.DEBUG)
+        >>> KivyLogger.setLevel(logging.DEBUG)
+        >>> # now we're ready
         >>> from moa.logger import MoaObjectLogger
         >>> from kivy.uix.widget import Widget
         >>> class LoggedWidget(MoaObjectLogger, Widget):
@@ -98,22 +153,24 @@ class MoaObjectLogger(object):
         >>> wid = LoggedWidget(logged_attrs=['height', 'logged_attrs', \
 'logged_pat'])
         >>> wid.height = 10
-        [DEBUG             ] [Moa         ] 2015-01-14 15:35:17,918 moa.logge\
-r.log_property_dispatch:138 height=10
+        [DEBUG             ] [Moa         ] 2015-01-30 13:06:49,184 G:\Pyth\
+on\libs\Playground\src\playground8.py:<module>:10 <__main__.LoggedWidget \
+object at 0x027E4228> : height=10
         >>> wid.logged_pat = '[widget wid] {}'
-        [DEBUG             ] [Moa         ] 2015-01-14 15:35:17,918 moa.logger\
-.log_property_dispatch:138 [widget wid] logged_pat=[widget wid] {}
+        [DEBUG             ] [Moa         ] 2015-01-30 13:06:49,184 \
+G:\Python\libs\Playground\src\playground8.py:<module>:11 [widget wid] \
+logged_pat=[widget wid] {msg}
         >>> wid.width = 10
         >>> # notice no output
         >>> wid.logged_attrs = ['width']
         >>> # notice no output here because the logged_* variables are changed\
  before the log output
         >>> wid.width = 50
-        [DEBUG             ] [Moa         ] 2015-01-14 15:35:17,918 moa.logger\
-.log_property_dispatch:138 [widget wid] width=50
+        [DEBUG             ] [Moa         ] 2015-01-30 13:06:49,184 \
+G:\Python\libs\Playground\src\playground8.py:<module>:15 [widget wid] width=50
         >>> wid.log('debug', 'hello {}', 'You')
-        [DEBUG             ] [Moa         ] 2015-01-14 16:34:41,226 moa.logger\
-.log:183 [widget wid] hello You
+        [DEBUG             ] [Moa         ] 2015-01-30 13:06:49,184 \
+G:\Python\libs\Playground\src\playground8.py:<module>:16 [widget wid] hello You
 
     '''
 
@@ -165,7 +222,7 @@ r.log_property_dispatch:138 height=10
         '''
         logger = self.logger
         if logger is not None:
-            logger.debug(self.logged_pat.format('{}={}'.format(name, value)))
+            logger.debug(self.logged_pat.format(msg='{}={}'.format(name, value), self=self))
 
     def log_event_dispatch(self, name, instance):
         '''The callback that is executed when a event is triggered.
@@ -179,7 +236,7 @@ r.log_property_dispatch:138 height=10
         '''
         logger = self.logger
         if logger is not None:
-            logger.debug(self.logged_pat.format('{}'.format(name)))
+            logger.debug(self.logged_pat.format(msg='{}'.format(name), self=self))
 
     def log(self, level, msg, *largs, **kwargs):
         '''A convenience method that formats the message according to
@@ -191,7 +248,7 @@ r.log_property_dispatch:138 height=10
         if logger is None:
             return
         getattr(logger, level)(self.logged_pat.format(
-            msg.format(*largs, **kwargs)))
+            msg=msg.format(*largs, **kwargs), self=self))
 
     log_attrs_type = OptionProperty('include', options=['exclude', 'include'])
     '''Whether the :attr:`logged_attrs` list indicates the properties and to
@@ -214,19 +271,21 @@ r.log_property_dispatch:138 height=10
     defaults to `[]`. See :class:`MoaObjectLogger` for an example.
     '''
 
-    logged_pat = StringProperty('{}')
-    '''The pattern used when logging to :attr:`logger`. The message will be
-    added with format on the string. Therefore, if it contains a `'{}'`, it'll
-    be replaced with the message.
+    logged_pat = StringProperty('{self} : {msg}')
+    '''The pattern used when logging to :attr:`logger`. The message logged will
+    be formatted with `loagged_pat.format(msg=msg, self=self)`. `msg` is the
+    message contents while self is this object whose :attr:`logger` we're
+    logging to.
 
     :attr:`logged_pat` is a :kivy:class:`~kivy.properties.StringProperty` and
-    defaults to `'{}'`. See :class:`MoaObjectLogger` for an example.
+    defaults to `'{self} : {msg}'`. See :class:`MoaObjectLogger` for an
+    example.
     '''
 
     logger = ObjectProperty(logging.getLogger(__name__), allownone=True)
     '''The logger object to which things are logged.
 
     :attr:`logger` is a :kivy:class:`~kivy.properties.ObjectProperty` and
-    defaults to a Logger object with name `__name__`. If None, no logging will
-    occur.
+    defaults to a Logger object with name `__name__`
+    (effectively `moa.logger`). If None, no logging will occur.
     '''
