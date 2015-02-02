@@ -57,8 +57,8 @@ class RecoveryTestCase(unittest.TestCase):
         app.root_stage.d.count = app.root_stage.b.count = 10
         app.root_stage.d.finished = app.root_stage.b.finished = True
 
-        f_named = app.save_state(prefix='test_recovery_')
-        f_unnamed = app.save_state(save_unnamed=True)
+        f_named = app.dump_attributes(prefix='test_recovery_')
+        f_unnamed = app.dump_attributes(save_unnamed=True)
         clean_stage = RecoveryStage()
 
         app.root_stage = RecoveryStage()
