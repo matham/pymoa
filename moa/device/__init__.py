@@ -60,14 +60,14 @@ class Device(MoaBase):
                 self.log('warning', 'Activated but activation was {}',
                          activation)
             self.activation = 'activating'
-            self.log('debug', 'Activating with {}. State was previously {}',
+            self.log('debug', 'Activating with {}. Device was previously {}',
                      identifier, activation)
         else:
             if activation == 'active' or activation == 'activating':
                 level = 'debug'
             else:
                 level = 'warning'
-            self.log(level, 'Activating skipped with {}. State was '
+            self.log(level, 'Activating skipped with {}. Device was '
                      'previously {}', identifier, activation)
         return result
 
@@ -155,15 +155,15 @@ format(identifier))
                 self.log('warning', 'Deactivated but activation was {}',
                          activation)
             self.activation = 'deactivating'
-            self.log('debug', 'Deactivating with {}. State was previously {}',
+            self.log('debug', 'Deactivating with {}. Device was previously {}',
                      identifier, activation)
         else:
             if activation == 'inactive' or activation == 'deactivating':
                 level = 'debug'
             else:
                 level = 'warning'
-            self.log(level, 'Deactivating skipped with {}. State was '
-                     'previously {}', identifier, activation)
+            self.log(level, 'Deactivating skipped with {}. Even though device '
+                     'was previously {}', identifier, activation)
         return result
 
     def on_data_update(self, instance):
