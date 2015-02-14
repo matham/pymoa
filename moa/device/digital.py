@@ -3,7 +3,7 @@
 
 __all__ = ('DigitalChannel', 'DigitalPort', 'ButtonChannel', 'ButtonPort')
 
-from kivy.properties import BooleanProperty, ObjectProperty
+from kivy.properties import BooleanProperty, ObjectProperty, DictProperty
 from moa.device.port import Channel, Port
 from time import clock
 
@@ -185,3 +185,53 @@ self.text, self.state))
             attr_map[attr].state = 'down'
         for attr in low:
             attr_map[attr].state = 'normal'
+
+
+class ButtonViewPort(DigitalPort):
+
+    dev_map = DictProperty({})
+
+    chan_dev_map = DictProperty({})
+
+    def __init__(self, **kwargs):
+        super(ButtonViewPort, self).__init__(**kwargs)
+        self.bind(dev_map=self._reverse_dev_mapping)
+        self._reverse_dev_mapping()
+
+    def _reverse_dev_mapping(self, *largs):
+        for k in self.dev_map:
+            if not hasattr(self, k):
+                raise AttributeError('{} is not an attribute of {}'
+                                     .format(k, self))
+        self.chan_dev_map = {v: k for k, v in self.dev_map.iteritems()}
+
+    def update_from_device(self, attr, button, instance, value):
+        button.state = 'down' if getattr(self, attr) else 'normal'
+
+    def update_from_button(self, attr, instance, value):
+        if value == 'down' and not getattr(self, attr):
+            self.set_state(high=[attr])
+        elif value == 'normal' and getattr(self, attr):
+            self.set_state(low=[attr])
+
+    def activate(self, *largs, **kwargs):
+        if super(ButtonViewPort, self).activate(*largs, **kwargs):
+            if 'o' in self.direction:
+                for attr, button in self.attr_map.items():
+                    button.state = 'normal'
+                    button.fast_bind('state', self.update_from_button, attr)
+            for attr, button in self.attr_map.items():
+                self.fast_bind(attr, self.update_from_device, attr, button)
+            return True
+        return False
+
+    def deactivate(self, *largs, **kwargs):
+        if super(ButtonViewPort, self).deactivate(*largs, **kwargs):
+            if 'o' in self.direction:
+                for attr, button in self.attr_map.items():
+                    button.state = 'normal'
+                    button.fast_unbind('state', self.update_from_button, attr)
+            for attr, button in self.attr_map.items():
+                self.fast_unbind(attr, self.update_from_device, attr, button)
+            return True
+        return False
