@@ -60,6 +60,20 @@ class StringList(list):
         0, None, apples, 55.7
     '''
 
+    autofill = False
+
+    def __init__(self, autofill=False, *largs, **kwargs):
+        super(StringList, self).__init__(*largs, **kwargs)
+        self.autofill = autofill
+
+    def __getitem__(self, key):
+        try:
+            return super(StringList, self).__getitem__(key)
+        except IndexError:
+            if not self.autofill or isinstance(key, slice) or key <= 0:
+                raise
+            return super(StringList, self).__getitem__(-1)
+
     def __str__(self):
         return ', '.join(map(str, self))
 
@@ -87,8 +101,9 @@ class String2DList(list):
         return self.__str__()
 
 
-def ConfigPropertyList(val, section, key, config, val_type, inner_list=False,
-                       **kwargs):
+def ConfigPropertyList(
+        val, section, key, config, val_type, inner_list=False, autofill=True,
+        **kwargs):
     '''A list implementation of :kivy:class:`ConfigParserProperty`. Other than
     `val_type`, and `inner_list`, the parameters are the same.
 
@@ -103,6 +118,8 @@ def ConfigPropertyList(val, section, key, config, val_type, inner_list=False,
             Whether the list is a 1D (False) or 2D (True) list. The lists are
             represented in the config file using the string output of
             :class:`StringList` and :class:`String2DList` respectively.
+        `autofille`: bool
+            Only for inner list in 2DList.
 
     :Returns:
         A :kivy:class:`ConfigParserProperty`.
@@ -173,23 +190,25 @@ fruit'], 'Attrs', 'vals_str', 'my_app', val_type=str)
     '''
     def to_list(val):
         if isinstance(val, list):
-            vals = StringList(val)
+            vals = StringList(autofill, val)
         elif isinstance(val, basestring):
-            vals = StringList(split(to_list_pat, val.strip(' []()')))
+            vals = StringList(autofill, split(to_list_pat, val.strip(' []()')))
         else:
-            vals = StringList([val])
+            vals = StringList(autofill, [val])
         for i, v in enumerate(vals):
             vals[i] = val_type(v)
         return vals
 
     def to_2d_list(val):
         if isinstance(val, list):
-            vals = String2DList(deepcopy(val))
+            vals = String2DList(
+                [StringList(autofill, l) for l in deepcopy(val)])
         elif isinstance(val, basestring):
-            vals = String2DList([split(to_list_pat, line.strip(' []()'))
-                                 for line in val.strip(' []()').splitlines()])
+            vals = String2DList(
+                [StringList(autofill, split(to_list_pat, line.strip(' []()')))
+                 for line in val.strip(' []()').splitlines()])
         else:
-            vals = StringList([[val]])
+            vals = String2DList([StringList(autofill, [val])])
         for i, line in enumerate(vals):
             for j, v in enumerate(line):
                 vals[i][j] = val_type(v)
