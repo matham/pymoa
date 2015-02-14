@@ -17,6 +17,8 @@ from os.path import join
 if environ.get('MOA_CLOCK', '0') in ('1', 'True'):
     from moa.clock import set_clock
     set_clock(clock='moa')
+else:
+    import moa.clock
 
 from moa.logger import Logger
 
