@@ -28,7 +28,7 @@ class MoaApp(App):
     ''' The root :class:`~moa.stage.MoaStage`, if provided.
     '''
 
-    data_directory = StringProperty('~/')
+    data_directory = StringProperty('../data')
     ''' The directory where required application data files are saved. This
     is the input directory for the app.
     '''
@@ -45,7 +45,7 @@ class MoaApp(App):
 
     def __init__(self, **kw):
         super(MoaApp, self).__init__(**kw)
-        resources.resource_add_path(self.data_directory)
+        resources.resource_add_path(path.expanduser(self.data_directory))
         Builder.load_file(path.join(path.dirname(__file__),
                                        'data', 'moa_style.kv'))
 
