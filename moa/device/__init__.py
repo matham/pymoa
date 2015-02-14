@@ -34,7 +34,7 @@ class Device(MoaBase):
         super(Device, self).__init__(**kwargs)
         self._activated_set = set()
 
-    def activate(self, identifier, **kwargs):
+    def activate(self, identifier, state='active', **kwargs):
         '''Called to activate the device.
 
         The method is overwritten and called by inherited devices to check
@@ -47,6 +47,8 @@ class Device(MoaBase):
                 The hash associated with this request. This is needed when
                 :meth:`deactivate` is called. See :meth:`deactivate`. If this
                 `identifier` has already been used it is ignored.
+            `state`: str
+                One of `activating` or `active`.
 
         :Returns:
             True if the device should be activated, False otherwise.
@@ -59,7 +61,7 @@ class Device(MoaBase):
             if (activation != 'inactive' and activation != 'deactivating'):
                 self.log('warning', 'Activated but activation was {}',
                          activation)
-            self.activation = 'activating'
+            self.activation = state
             self.log('debug', 'Activating with {}. Device was previously {}',
                      identifier, activation)
         else:
@@ -71,7 +73,7 @@ class Device(MoaBase):
                      'previously {}', identifier, activation)
         return result
 
-    def deactivate(self, identifier, clear=False, **kwargs):
+    def deactivate(self, identifier, clear=False, state='inactive', **kwargs):
         '''Called to deactivate the device.
 
         The method is overwritten and called by inherited widgets to check
@@ -108,7 +110,7 @@ class Device(MoaBase):
             >>> class MyDevice(Device):
                 >>> def activate(self, identifier, **kwargs):
                 ...     if super(MyDevice, self).activate(identifier, \
-**kwargs):
+state='activating', **kwargs):
                 ...         print('Activating with {}'.format(identifier))
                 ...         self.activation = 'active'
                 ...         return True
@@ -117,7 +119,7 @@ class Device(MoaBase):
                 ...
                 ... def deactivate(self, identifier, **kwargs):
                 ...     if super(MyDevice, self).deactivate(identifier, \
-**kwargs):
+state='deactivating', **kwargs):
                 ...         print('De-activating with {}'.format(identifier))
                 ...         self.activation = 'inactive'
                 ...         return True
@@ -154,7 +156,7 @@ format(identifier))
             if (activation != 'active' and activation != 'activating'):
                 self.log('warning', 'Deactivated but activation was {}',
                          activation)
-            self.activation = 'deactivating'
+            self.activation = state
             self.log('debug', 'Deactivating with {}. Device was previously {}',
                      identifier, activation)
         else:

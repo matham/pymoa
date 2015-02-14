@@ -100,14 +100,12 @@ class ButtonChannel(DigitalChannel):
             button = self.button
             button.bind(state=self._update_state)
             self.state = button.state == 'down'
-            self.activation = 'active'
             return True
         return False
 
     def deactivate(self, *largs, **kwargs):
         if super(ButtonChannel, self).deactivate(*largs, **kwargs):
             self.button.unbind(state=self._update_state)
-            self.activation = 'inactive'
             return True
         return False
 
@@ -168,7 +166,6 @@ self.text, self.state))
             for attr, button in self.attr_map.items():
                 button.bind(state=self._update_state)
                 setattr(self, attr, button.state == 'down')
-            self.activation = 'active'
             return True
         return False
 
@@ -176,7 +173,6 @@ self.text, self.state))
         if super(ButtonPort, self).deactivate(*largs, **kwargs):
             for button in self.chan_attr_map:
                 button.unbind(state=self._update_state)
-            self.activation = 'inactive'
             return True
         return False
 
