@@ -229,8 +229,8 @@ class ButtonViewPort(DigitalPort):
         if super(ButtonViewPort, self).deactivate(*largs, **kwargs):
             if 'o' in self.direction:
                 for attr, button in self.attr_map.items():
-                    button.state = 'normal'
                     button.fast_unbind('state', self.update_from_button, attr)
+                    button.state = 'normal'
             for attr, button in self.attr_map.items():
                 self.fast_unbind(attr, self.update_from_device, attr, button)
             return True
