@@ -6,6 +6,7 @@ __all__ = ('to_bool', 'ConfigPropertyList', 'ConfigPropertyDict', 'StringList',
 
 from re import compile, split
 from copy import deepcopy
+from functools import partial
 
 from kivy.properties import ConfigParserProperty
 
@@ -101,6 +102,18 @@ class String2DList(list):
         return self.__str__()
 
 
+def to_string_list(val_type, val, autofill=True):
+    if isinstance(val, list):
+        vals = StringList(autofill, val)
+    elif isinstance(val, basestring):
+        vals = StringList(autofill, split(to_list_pat, val.strip(' []()')))
+    else:
+        vals = StringList(autofill, [val])
+    for i, v in enumerate(vals):
+        vals[i] = val_type(v)
+    return vals
+
+
 def ConfigPropertyList(
         val, section, key, config, val_type, inner_list=False, autofill=True,
         **kwargs):
@@ -188,17 +201,6 @@ fruit'], 'Attrs', 'vals_str', 'my_app', val_type=str)
         vals = 1, 2, 3, 4
         vals_str = apple, wine, cheese and fruit
     '''
-    def to_list(val):
-        if isinstance(val, list):
-            vals = StringList(autofill, val)
-        elif isinstance(val, basestring):
-            vals = StringList(autofill, split(to_list_pat, val.strip(' []()')))
-        else:
-            vals = StringList(autofill, [val])
-        for i, v in enumerate(vals):
-            vals[i] = val_type(v)
-        return vals
-
     def to_2d_list(val):
         if isinstance(val, list):
             vals = String2DList(
@@ -214,7 +216,8 @@ fruit'], 'Attrs', 'vals_str', 'my_app', val_type=str)
                 vals[i][j] = val_type(v)
         return vals
 
-    v_type = to_2d_list if inner_list else to_list
+    v_type = to_2d_list if inner_list else partial(
+        to_string_list, val_type, autofill=autofill)
     val = v_type(val)
     return ConfigParserProperty(val, section, key, config, val_type=v_type,
                                 **kwargs)
