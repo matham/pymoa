@@ -129,6 +129,47 @@ prop_name='value')
         setattr(self.channel_widget, self.prop_name, state)
 
 
+class NumericPropertyViewChannel(AnalogChannel):
+
+    channel_widget = ObjectProperty(None)
+    '''The widget whose :kivy:class:`~kivy.properties.NumericProperty`
+    the channels is bound to.
+    '''
+
+    prop_name = StringProperty('')
+    '''The name of the :kivy:class:`~kivy.properties.NumericProperty` in
+    widget :attr:`channel_widget` that represents the analog channel.
+    '''
+
+    def _update_from_device(self, instance, value):
+        setattr(self.channel_widget, self.prop_name, value)
+
+    def _update_from_channel_widget(self, instance, value):
+        if self.state != value:
+            self.set_state(value)
+
+    def activate(self, *largs, **kwargs):
+        if super(NumericPropertyViewChannel, self).activate(*largs, **kwargs):
+            if 'o' in self.direction:
+                widget = self.channel_widget
+                widget.fast_bind(
+                    self.prop_name, self._update_from_channel_widget)
+            self.fast_bind('state', self._update_from_device)
+            return True
+        return False
+
+    def deactivate(self, *largs, **kwargs):
+        if super(NumericPropertyViewChannel, self).deactivate(*largs, **kwargs):
+            if 'o' in self.direction:
+                widget = self.channel_widget
+                if widget is not None:
+                    widget.fast_unbind(
+                        self.prop_name, self._update_from_channel_widget)
+            self.fast_unbind('state', self._update_from_device)
+            return True
+        return False
+
+
 class NumericPropertyPort(AnalogPort):
     '''A class that represents multiple analog channels with multiple
     :kivy:class:`~kivy.properties.NumericProperty` instances of a widget.
@@ -219,3 +260,56 @@ class NumericPropertyPort(AnalogPort):
         widget = self.channel_widget
         for attr, value in kwargs.items():
             setattr(widget, attr_map[attr], value)
+
+
+class NumericPropertyViewPort(AnalogPort):
+
+    channel_widget = ObjectProperty(None)
+
+    dev_map = DictProperty({})
+
+    chan_dev_map = DictProperty({})
+
+    def __init__(self, **kwargs):
+        super(ButtonViewPort, self).__init__(**kwargs)
+        self.bind(dev_map=self._reverse_dev_mapping)
+        self._reverse_dev_mapping()
+
+    def _reverse_dev_mapping(self, *largs):
+        for k in self.dev_map:
+            if not hasattr(self, k):
+                raise AttributeError('{} is not an attribute of {}'
+                                     .format(k, self))
+        self.chan_dev_map = {v: k for k, v in self.dev_map.iteritems()}
+
+    def _update_from_device(self, attr, instance, value):
+        setattr(self.channel_widget, attr, value)
+
+    def _update_from_channel_widget(self, attr, instance, value):
+        if geattr(self, attr) != value:
+            self.set_state(**{attr: value})
+
+    def activate(self, *largs, **kwargs):
+        if super(NumericPropertyViewPort, self).activate(*largs, **kwargs):
+            if 'o' in self.direction:
+                wid = self.channel_widget
+                for attr, wid_attr in self.attr_map.items():
+                    wid.fast_bind(
+                        wid_attr, self._update_from_channel_widget, attr)
+            for attr, wid_attr in self.attr_map.items():
+                self.fast_bind(attr, self._update_from_device, wid_attr)
+            return True
+        return False
+
+    def deactivate(self, *largs, **kwargs):
+        if super(NumericPropertyViewPort, self).deactivate(*largs, **kwargs):
+            if 'o' in self.direction:
+                wid = self.channel_widget
+                if wid is not None:
+                    for attr, wid_attr in self.attr_map.items():
+                        wid.fast_unbind(
+                            wid_attr, self._update_from_channel_widget, attr)
+            for attr, wid_attr in self.attr_map.items():
+                self.fast_unbind(attr, self._update_from_device, wid_attr)
+            return True
+        return False

@@ -116,6 +116,44 @@ class ButtonChannel(DigitalChannel):
         self.button.state = 'down' if state else 'normal'
 
 
+class ButtonViewChannel(DigitalChannel):
+
+    button = ObjectProperty(None)
+    '''The :kivy:class:`~kivy.uix.behaviors.ButtonBehavior` derived instance
+    controlled/read by the channel.
+    '''
+
+    def _update_from_device(self, instance, value):
+        self.button.state = 'down' if self.state else 'normal'
+
+    def _update_from_button(self, instance, value):
+        if value == 'down' and not self.state:
+            self.set_state(True)
+        elif value == 'normal' and self.state:
+            self.set_state(False)
+
+    def activate(self, *largs, **kwargs):
+        if super(ButtonViewChannel, self).activate(*largs, **kwargs):
+            if 'o' in self.direction:
+                button = self.button
+                button.state = 'normal'
+                button.fast_bind('state', self._update_from_button)
+            self.fast_bind('state', self._update_from_device)
+            return True
+        return False
+
+    def deactivate(self, *largs, **kwargs):
+        if super(ButtonViewChannel, self).deactivate(*largs, **kwargs):
+            if 'o' in self.direction:
+                button = self.button
+                if button is not None:
+                    button.fast_unbind('state', self._update_from_button)
+                    button.state = 'normal'
+            self.fast_unbind('state', self._update_from_device)
+            return True
+        return False
+
+
 class ButtonPort(DigitalPort):
     '''A device which represents the state of multiple Kivy
     :kivy:class:`~kivy.uix.behaviors.ButtonBehavior` buttons.
@@ -205,10 +243,10 @@ class ButtonViewPort(DigitalPort):
                                      .format(k, self))
         self.chan_dev_map = {v: k for k, v in self.dev_map.iteritems()}
 
-    def update_from_device(self, attr, button, instance, value):
+    def _update_from_device(self, attr, button, instance, value):
         button.state = 'down' if getattr(self, attr) else 'normal'
 
-    def update_from_button(self, attr, instance, value):
+    def _update_from_button(self, attr, instance, value):
         if value == 'down' and not getattr(self, attr):
             self.set_state(high=[attr])
         elif value == 'normal' and getattr(self, attr):
@@ -219,9 +257,9 @@ class ButtonViewPort(DigitalPort):
             if 'o' in self.direction:
                 for attr, button in self.attr_map.items():
                     button.state = 'normal'
-                    button.fast_bind('state', self.update_from_button, attr)
+                    button.fast_bind('state', self._update_from_button, attr)
             for attr, button in self.attr_map.items():
-                self.fast_bind(attr, self.update_from_device, attr, button)
+                self.fast_bind(attr, self._update_from_device, attr, button)
             return True
         return False
 
@@ -229,9 +267,9 @@ class ButtonViewPort(DigitalPort):
         if super(ButtonViewPort, self).deactivate(*largs, **kwargs):
             if 'o' in self.direction:
                 for attr, button in self.attr_map.items():
-                    button.fast_unbind('state', self.update_from_button, attr)
+                    button.fast_unbind('state', self._update_from_button, attr)
                     button.state = 'normal'
             for attr, button in self.attr_map.items():
-                self.fast_unbind(attr, self.update_from_device, attr, button)
+                self.fast_unbind(attr, self._update_from_device, attr, button)
             return True
         return False
