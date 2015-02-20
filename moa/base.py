@@ -8,10 +8,15 @@ from weakref import proxy
 from functools import partial
 
 from kivy.event import EventDispatcher
-from kivy.properties import StringProperty, DictProperty
+from kivy.properties import (
+    StringProperty, DictProperty, ObjectProperty, AliasProperty)
 from kivy.lang import Builder
 
 from moa.logger import MoaObjectLogger
+
+named_moas = None
+'''Highest level of all named moas.
+'''
 
 valid_name_pat = compile('[_A-Za-z][_a-zA-Z0-9]*$')
 
@@ -27,9 +32,21 @@ def _moa_destructor(uid, r):
     Builder.unbind_widget(uid)
 
 
+class LevelUp(object):
+    pass
+
+
 class NamedMoas(EventDispatcher):
     '''
     '''
+
+    moa_parent = None
+
+    def __getattribute__(self, name):
+        val = super(NamedMoas, self).__getattribute__(name)
+        if val is LevelUp:
+            return getattr(self.moa_parent, name)
+        return val
 
     def __getattr__(self, name):
         try:
@@ -38,6 +55,8 @@ class NamedMoas(EventDispatcher):
             if match(valid_name_pat, name) is None:
                 raise
             self.create_property(name, None, rebind=True, allownone=True)
+            if self.moa_parent is not None:
+                setattr(self, name, LevelUp)
             return None
 
     def property(self, name, quiet=False):
@@ -45,10 +64,47 @@ class NamedMoas(EventDispatcher):
         if prop is not None or match(valid_name_pat, name) is None:
             return prop
         self.create_property(name, None, rebind=True, allownone=True)
+        if self.moa_parent is not None:
+            setattr(self, name, LevelUp)
         return super(NamedMoas, self).property(name, quiet=quiet)
 
+    def new_moas(self):
+        m = NamedMoas()
+        m.moa_parent = self
+        return m
 
-class MoaBase(MoaObjectLogger, EventDispatcher):
+    def reset_attr(self, name):
+        moas = self.moa_parent
+        if moas is None or getattr(self, name) is not LevelUp:
+            setattr(self, name, None)
+        else:
+            moas.reset_attr(name)
+
+
+class RemoteMoaBehavior(object):
+    '''Should be before EventDispatcher, otherwise it eats the kwargs.
+    '''
+
+    _moas = ObjectProperty(None)
+
+    def __init__(self, moas=None, **kwargs):
+        self.moas = moas
+        super(RemoteMoaBehavior, self).__init__(**kwargs)
+
+    def _get_moas(self):
+        moas = self._moas
+        if moas is None:
+            return named_moas
+        return moas
+
+    def _set_moas(self, value):
+        self._moas = value
+
+    moas = AliasProperty(
+        _get_moas, _set_moas, bind=('_moas', ), cache=True, rebind=True)
+
+
+class MoaBase(MoaObjectLogger, RemoteMoaBehavior, EventDispatcher):
     '''The class that is the base of many Moa classes and provides the required
     kivy properties and logging mechanisms.
 
@@ -96,8 +152,9 @@ class MoaBase(MoaObjectLogger, EventDispatcher):
         '''
         name = self.name
         prev = self._prev_name
+        named_moas = self.moas
         if prev and getattr(named_moas, prev) == self:
-            setattr(named_moas, prev, None)
+            named_moas.reset_attr(prev)
         self._prev_name = name
         if not name:
             return

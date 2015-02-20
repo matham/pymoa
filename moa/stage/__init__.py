@@ -8,11 +8,11 @@ import time
 
 from kivy.properties import (BooleanProperty, NumericProperty, StringProperty,
     OptionProperty, BoundedNumericProperty, ReferenceListProperty,
-    ObjectProperty, ListProperty)
+    ObjectProperty, ListProperty, AliasProperty)
 from kivy.uix.widget import Widget
 from kivy.lang import Factory
 
-from moa.base import MoaBase
+from moa.base import MoaBase, named_moas
 from moa.clock import Clock
 
 
@@ -523,3 +523,18 @@ class MoaStage(StageBase):
     finishing = BooleanProperty(False)
     ''' If the stage is trying to finish.
     '''
+
+    def _get_moas(self):
+        moas = self._moas
+        if moas is None:
+            parent = self.parent
+            if parent is None:
+                return named_moas
+            return parent.moas
+        return moas
+
+    def _set_moas(self, value):
+        self._moas = value
+
+    moas = AliasProperty(
+        _get_moas, _set_moas, bind=('_moas', ), cache=False, rebind=True)
