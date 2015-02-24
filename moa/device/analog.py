@@ -5,7 +5,8 @@ devices.
 __all__ = ('AnalogChannel', 'AnalogPort', 'NumericPropertyChannel',
            'NumericPropertyPort')
 
-from kivy.properties import NumericProperty, ObjectProperty, StringProperty
+from kivy.properties import (
+    NumericProperty, ObjectProperty, StringProperty, DictProperty)
 from moa.device.port import Channel, Port
 from functools import partial
 from time import clock
