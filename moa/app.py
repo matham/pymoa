@@ -24,7 +24,9 @@ class MoaApp(App):
     '''App class to run Moa experiments. See module for details.
     '''
 
-    root_stage = ObjectProperty(None, allownone=True)
+    root = ObjectProperty(None, allownone=True, rebind=True)
+
+    root_stage = ObjectProperty(None, allownone=True, rebind=True)
     ''' The root :class:`~moa.stage.MoaStage`, if provided.
     '''
 
