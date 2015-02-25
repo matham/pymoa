@@ -160,10 +160,13 @@ format(identifier))
             self.log('debug', 'Deactivating with {}. Device was previously {}',
                      identifier, activation)
         else:
-            if activation == 'inactive' or activation == 'deactivating':
-                level = 'debug'
-            else:
+            if ((activation == 'inactive' or activation == 'deactivating') and
+                len(active) or
+                (activation == 'active' or activation == 'activating') and
+                not old_len):
                 level = 'warning'
+            else:
+                level = 'debug'
             self.log(level, 'Deactivating skipped with {}. Even though device '
                      'was previously {}', identifier, activation)
         return result
