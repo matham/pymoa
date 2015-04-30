@@ -81,7 +81,7 @@ class NamedMoas(EventDispatcher):
             moas.reset_attr(name)
 
 
-class RemoteMoaBehavior(object):
+class NamedMoaBehavior(object):
     '''Should be before EventDispatcher, otherwise it eats the kwargs.
     '''
 
@@ -89,22 +89,26 @@ class RemoteMoaBehavior(object):
 
     def __init__(self, moas=None, **kwargs):
         self.moas = moas
-        super(RemoteMoaBehavior, self).__init__(**kwargs)
+        super(NamedMoaBehavior, self).__init__(**kwargs)
 
     def _get_moas(self):
         moas = self._moas
-        if moas is None:
-            return named_moas
-        return moas
+        if moas is not None:
+            return moas
+
+        parent = getattr(self, 'parent', None)
+        if parent is not None:
+            return getattr(parent, 'moas', named_moas)
+        return named_moas
 
     def _set_moas(self, value):
         self._moas = value
 
     moas = AliasProperty(
-        _get_moas, _set_moas, bind=('_moas', ), cache=True, rebind=True)
+        _get_moas, _set_moas, bind=('_moas', ), cache=False, rebind=True)
 
 
-class MoaBase(MoaObjectLogger, RemoteMoaBehavior, EventDispatcher):
+class MoaBase(MoaObjectLogger, NamedMoaBehavior, EventDispatcher):
     '''The class that is the base of many Moa classes and provides the required
     kivy properties and logging mechanisms.
 
