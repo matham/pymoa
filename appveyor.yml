@@ -38,6 +38,14 @@ build_script:
 
     Check-Error
 
+    python -m pip install --upgrade pip wheel nose
+
+    Check-Error
+
+    python -m pip install -e .
+
+    Check-Error
+
 test_script:
 - ps: >-
     function Check-Error
