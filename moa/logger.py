@@ -175,23 +175,25 @@ G:\Python\libs\Playground\src\playground8.py:<module>:16 [widget wid] hello You
     '''
 
     def __init__(self, **kwargs):
+        if 'logger' not in kwargs and self.logger is None:
+            self.logger = logging.getLogger(self.__module__)
         super(MoaObjectLogger, self).__init__(**kwargs)
         if self.logger is not None:
-            self.fast_bind('logged_attrs', self._update_bound_loggers, 'bind')
-            self.fast_bind(
+            self.fbind('logged_attrs', self._update_bound_loggers, 'bind')
+            self.fbind(
                 'log_attrs_type', self._update_bound_loggers, 'bind')
             self._update_bound_loggers()
 
     def _update_bound_loggers(self, action='bind', *largs):
-        fast_unbind = self.fast_unbind
+        funbind = self.funbind
         for event in self.events():
-            fast_unbind(event, self.log_event_dispatch, event)
+            funbind(event, self.log_event_dispatch, event)
         for prop in self.properties():
-            fast_unbind(prop, self.log_property_dispatch, prop)
+            funbind(prop, self.log_property_dispatch, prop)
         if action == 'unbind':
             return
 
-        fast_bind = self.fast_bind
+        fbind = self.fbind
         events, props = self.events(), self.properties()
         attrs = self.logged_attrs
         select = self.log_attrs_type
@@ -204,9 +206,9 @@ G:\Python\libs\Playground\src\playground8.py:<module>:16 [widget wid] hello You
                 props = [p for p in props if p not in attrs]
 
         for event in events:
-            fast_bind(event, self.log_event_dispatch, event)
+            fbind(event, self.log_event_dispatch, event)
         for prop in props:
-            fast_bind(prop, self.log_property_dispatch, prop)
+            fbind(prop, self.log_property_dispatch, prop)
 
     def log_property_dispatch(self, name, instance, value):
         '''The callback that is executed when a property is changed.
@@ -282,7 +284,7 @@ G:\Python\libs\Playground\src\playground8.py:<module>:16 [widget wid] hello You
     example.
     '''
 
-    logger = ObjectProperty(logging.getLogger(__name__), allownone=True)
+    logger = ObjectProperty(None, allownone=True)
     '''The logger object to which things are logged.
 
     :attr:`logger` is a :kivy:class:`~kivy.properties.ObjectProperty` and

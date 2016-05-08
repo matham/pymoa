@@ -137,8 +137,8 @@ class ButtonViewChannel(DigitalChannel):
             if 'o' in self.direction:
                 button = self.button
                 button.state = 'normal'
-                button.fast_bind('state', self._update_from_button)
-            self.fast_bind('state', self._update_from_device)
+                button.fbind('state', self._update_from_button)
+            self.fbind('state', self._update_from_device)
             return True
         return False
 
@@ -147,9 +147,9 @@ class ButtonViewChannel(DigitalChannel):
             if 'o' in self.direction:
                 button = self.button
                 if button is not None:
-                    button.fast_unbind('state', self._update_from_button)
+                    button.funbind('state', self._update_from_button)
                     button.state = 'normal'
-            self.fast_unbind('state', self._update_from_device)
+            self.funbind('state', self._update_from_device)
             return True
         return False
 
@@ -257,9 +257,9 @@ class ButtonViewPort(DigitalPort):
             if 'o' in self.direction:
                 for attr, button in self.attr_map.items():
                     button.state = 'normal'
-                    button.fast_bind('state', self._update_from_button, attr)
+                    button.fbind('state', self._update_from_button, attr)
             for attr, button in self.attr_map.items():
-                self.fast_bind(attr, self._update_from_device, attr, button)
+                self.fbind(attr, self._update_from_device, attr, button)
             return True
         return False
 
@@ -267,9 +267,9 @@ class ButtonViewPort(DigitalPort):
         if super(ButtonViewPort, self).deactivate(*largs, **kwargs):
             if 'o' in self.direction:
                 for attr, button in self.attr_map.items():
-                    button.fast_unbind('state', self._update_from_button, attr)
+                    button.funbind('state', self._update_from_button, attr)
                     button.state = 'normal'
             for attr, button in self.attr_map.items():
-                self.fast_unbind(attr, self._update_from_device, attr, button)
+                self.funbind(attr, self._update_from_device, attr, button)
             return True
         return False

@@ -3,11 +3,8 @@
 
 from __future__ import absolute_import
 
-__all__ = ('CallbackDeque', 'CallbackQueue', 'ScheduledEventLoop')
-
 from collections import defaultdict, deque
 from threading import RLock, Event, Thread
-import traceback
 try:
     from Queue import Queue
 except ImportError:
@@ -15,6 +12,8 @@ except ImportError:
 import sys
 
 from moa.clock import Clock
+
+__all__ = ('CallbackDeque', 'CallbackQueue', 'ScheduledEventLoop')
 
 
 class CallbackDeque(deque):
@@ -142,25 +141,25 @@ class ScheduledEvent(object):
     Also, if `trigger` is False, :attr:`callback` will get a keyword argument
     called event, which is the instance of this class that caused the callback.
     '''
-    cls_method = True
-    '''If this callback is to be executed for method :attr:`name` belonging to
-    to :class:`ScheduledEventLoop` (True), or to
-    :meth:`ScheduledEventLoop.target` (False).
+    obj = None
+    '''The object with the method :attr:`name` which will be called from the
+    event loop thread. None means it's a not a method but a function.
     '''
     name = ''
     '''The name of the method associated with this event. See
-    :meth:`ScheduledEventLoop.request_callback`.
+    :meth:`ScheduledEventLoop.request_callback`. If :attr:`obj` is None then
+    this is an actual function.
     '''
 
     def __init__(self, callback=None, func_kwargs={}, repeat=False,
-                 trigger=False, cls_method=True, name=''):
+                 trigger=False, obj=None, name=''):
         self.callback = callback
         self.func_kwargs = func_kwargs
         self.repeat = repeat
         self.scheduled_callbacks = []
         self.trigger = trigger
-        self.cls_method = cls_method
         self.name = name
+        self.obj = obj
 
 
 class ScheduledEventLoop(object):
@@ -181,8 +180,6 @@ class ScheduledEventLoop(object):
             See :attr:`target`
         `daemon`: bool
             See :attr:`_daemon`. Defaults to False.
-        `cls_method`: bool
-            See :attr:`cls_method`. Defaults to True.
 
     For example::
 
@@ -262,18 +259,10 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
     can be a method of a class co-inherited from :class:`ScheduledEventLoop`,
     or a method of the object in target.
     '''
-    cls_method = True
-    '''If a callback scheduled with :meth:`request_callback` when `cls_method`
-    is None is to be executed for :meth:`request_callback` parameter `name`
-    belonging to to :class:`ScheduledEventLoop` (True), or to
-    :meth:`ScheduledEventLoop.target` (False).
-    '''
 
-    def __init__(self, target=None, daemon=False, cls_method=True,
-                 **kwargs):
+    def __init__(self, target=None, daemon=False, **kwargs):
         super(ScheduledEventLoop, self).__init__(**kwargs)
         self._daemon = daemon
-        self.cls_method = cls_method
         self.__callback_lock = RLock()
         self.__thread_event = Event()
         self.__callbacks = defaultdict(list)
@@ -304,16 +293,17 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
         This method is not multi-threading safe with :meth:`stop_thread`, so
         it should only be called from the main kivy thread.
         '''
-        if self.__thread  is not None:
+        if self.__thread is not None:
             return
         self.__signal_exit = False
         self.__thread_event.set()
         self.__thread = Thread(
-            target=self._callback_thread, name='ScheduledEventLoop')
+            target=self._callback_thread,
+            name='ScheduledEventLoop ({})'.format(self))
         self.__thread.daemon = self._daemon
         self.__thread.start()
 
-    def stop_thread(self, join=False):
+    def stop_thread(self, join=False, timeout=None, clear=True):
         '''Stops the internal thread. It does not modify any callbacks.
 
         This method is not multi-threading safe with :meth:`start_thread`, so
@@ -324,12 +314,23 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
             `join`: bool
                 If True, the calling thread will join the thread until it
                 exits.
+
+        :returns:
+
+            True if killed the thread.
         '''
         self.__signal_exit = True
         self.__thread_event.set()
         thread = self.__thread
         if join and thread is not None:
-            thread.join()
+            thread.join(timeout=timeout)
+
+        if clear:
+            self.clear_events()
+
+        if thread is not None:
+            return not thread.is_alive()
+        return True
 
     def handle_exception(self, exception, event):
         ''' Called from the internal thread when the method executed within the
@@ -351,7 +352,7 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
         pass
 
     def request_callback(self, name, callback=None, trigger=True,
-                         repeat=False, cls_method=None, **kwargs):
+                         repeat=False, obj=None, **kwargs):
         '''Adds a callback to be executed by the internal thread.
         See :class:`ScheduledEvent`.
 
@@ -373,11 +374,8 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
                 See :attr:`ScheduledEvent.trigger`.
             `repeat`: bool
                 See :attr:`ScheduledEvent.repeat`.
-            `cls_method`: bool or None
-                See :attr:`ScheduledEvent.cls_method`. As opposed to
-                :attr:`ScheduledEvent.cls_method`, this parameter can also be
-                None, in which case :attr:`cls_method` will be used
-                instead. It defaults to None.
+            `obj`: object or None
+                See :attr:`ScheduledEvent.obj`. Defaults to None.
             `**kwargs`:
                 The caught keyword arguments that will be passed to the method
                 `name`. See :attr:`ScheduledEvent.func_kwargs`.
@@ -390,11 +388,9 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
             necessarily the order in which the internal thread will execute
             them.
         '''
-        if cls_method is None:
-            cls_method = self.cls_method
         ev = ScheduledEvent(
             callback=callback, func_kwargs=kwargs, repeat=repeat,
-            trigger=trigger, cls_method=cls_method, name=name)
+            trigger=trigger, obj=obj, name=name)
         with self.__callback_lock:
             self.__callbacks[name].append(ev)
         if trigger:
@@ -442,10 +438,10 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
             thread needs to execute them.
         '''
         got_callback = False
-        cls_method = event.cls_method
+        obj = event.obj
         for ev in callbacks[:]:
             if ((ev.trigger and ev is not event) or
-                cls_method is not ev.cls_method or ev not in callbacks):
+                    obj is not ev.obj or ev not in callbacks):
                 continue
 
             if ev.callback is None:
@@ -523,18 +519,19 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
 
                         # the order of these checks cannot be changed because
                         # it needs to be inverse order of _service_main_thread
-                        if (not ev.trigger or (not ev.repeat and len(
-                            ev.scheduled_callbacks)) or ev not in cb):
+                        if (not ev.trigger or
+                            (not ev.repeat and len(ev.scheduled_callbacks)) or
+                                ev not in cb):
                             continue
 
-                        f = getattr(
-                            self if ev.cls_method else self.target, key)
+                        f = ev.name if ev.obj is None else \
+                            getattr(ev.obj, ev.name)
                         try:
                             failed = None
                             res = f(**ev.func_kwargs)
                         except Exception as e:
                             failed = True
-                            retry = handler((e, traceback.format_exc()), ev)
+                            retry = handler((e, sys.exc_info()), ev)
                             skip = False
                             while retry:
                                 try:
@@ -560,5 +557,5 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
                 if has_events or self.__signal_exit:
                     event.set()
         except Exception as e:
-            handler((e, traceback.format_exc()), None)
+            handler((e, sys.exc_info()), None)
         self.__thread = None

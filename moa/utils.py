@@ -327,3 +327,125 @@ def ConfigPropertyDict(val, section, key, config, val_type, key_type,
     val = to_dict(val)
     return ConfigParserProperty(val, section, key, config, val_type=to_dict,
                                 **kwargs)
+
+
+class ObjectStateTracker(object):
+    '''For example::
+
+        >>> from kivy._event import EventDispatcher
+        >>> from kivy.properties import BooleanProperty, StringProperty
+        >>> from moa.utils import ObjectStateTracker
+
+        >>> def callback():
+        ...     print('Done!!!')
+
+        >>> class ExampleA(EventDispatcher):
+        ...
+        ...     name = StringProperty('hello')
+        ...     state = BooleanProperty(False)
+
+        >>> tracker = ObjectStateTracker()
+        >>> a = ExampleA()
+
+        >>> tracker.add_link(callback, (a, {'name': 'cheese', 'state': True}))
+        >>> a.state = True
+        >>> a.name = 'cheese'
+        >>> tracker.add_link(callback, (a, {'name': 'cheese', 'state': True}))
+        Done!!!
+        >>> tracker.add_link(callback, (a, {'name': 'apple'}))
+        Done!!!
+        >>> tracker.add_link(callback, (a, {'name': 'orange'}))
+        >>> a.name = 'orange'
+        >>> a.name = 'apple'
+        Done!!!
+        >>> a.name = 'orange'
+        Done!!!
+    '''
+
+    states = []
+
+    running = False
+
+    _callback_uids = []
+
+    def __init__(self, start=True, **kwargs):
+        super(ObjectStateTracker, self).__init__(**kwargs)
+        self.states = []
+        self.running = True
+
+    def add_link(self, link_callback, *largs):
+        if not largs:
+            return
+
+        d = {}
+        for k, v in largs:
+            if k in d:
+                d[k].update(v)
+            else:
+                d[k] = v
+        self.states.append((d, link_callback))
+        self._start()
+
+    def add_func_links(self, objects, callbacks, prop, value):
+        if not objects or not callbacks:
+            return
+
+        for obj, callback in zip(objects, callbacks):
+            self.add_link(callback, (obj, {prop: value}))
+
+    def start(self):
+        if self.running:
+            return
+
+        self.running = True
+        self._start()
+
+    def stop(self):
+        if not self.running:
+            return
+
+        self.running = False
+        for obj, prop, uid in self._callback_uids:
+            obj.unbind_uid(prop, uid)
+        self._callback_uids = []
+
+    def clear(self):
+        self.stop()
+        self.states = []
+
+    def _start(self):
+        while self.running and self.states and not self._callback_uids:
+            callbacks = self._callback_uids = []
+            for obj, props in self.states[0][0].items():
+                for prop, state in props.items():
+                    if state == getattr(obj, prop):
+                        continue
+
+                    callbacks.append((
+                        obj, prop,
+                        obj.fbind(prop, self._prop_callback, obj, prop)))
+
+            if callbacks:
+                return
+            f = self.states[0][1]
+            del self.states[0]
+            f()
+
+    def _prop_callback(self, obj, prop, *largs):
+        state0, f = self.states[0]
+        if state0[obj][prop] != getattr(obj, prop):
+            return
+
+        obj.funbind(prop, self._prop_callback, obj, prop)
+        del state0[obj][prop]
+        if state0[obj]:
+            return
+
+        del state0[obj]
+        if state0:
+            return
+
+        del self.states[0]
+        self._callback_uids = []
+        f()
+        self._start()

@@ -1,15 +1,12 @@
 '''This module provides an App class used to run a Moa experiment.
 '''
 
-__all__ = ('MoaApp', )
-
 import os
 from os import path
 import tempfile
 import json
 
 import kivy
-kivy.require('1.9.0')
 from kivy.properties import StringProperty, ObjectProperty
 from kivy.app import App
 from kivy.lang import Builder
@@ -18,9 +15,12 @@ from kivy import resources
 import moa.factory_registers
 from moa.compat import decode_dict, PY2
 from moa.logger import Logger
+from moa.base import MoaBase
+
+__all__ = ('MoaApp', )
 
 
-class MoaApp(App):
+class MoaApp(MoaBase, App):
     '''App class to run Moa experiments. See module for details.
     '''
 

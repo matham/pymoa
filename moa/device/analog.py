@@ -153,9 +153,9 @@ class NumericPropertyViewChannel(AnalogChannel):
         if super(NumericPropertyViewChannel, self).activate(*largs, **kwargs):
             if 'o' in self.direction:
                 widget = self.channel_widget
-                widget.fast_bind(
+                widget.fbind(
                     self.prop_name, self._update_from_channel_widget)
-            self.fast_bind('state', self._update_from_device)
+            self.fbind('state', self._update_from_device)
             return True
         return False
 
@@ -164,9 +164,9 @@ class NumericPropertyViewChannel(AnalogChannel):
             if 'o' in self.direction:
                 widget = self.channel_widget
                 if widget is not None:
-                    widget.fast_unbind(
+                    widget.funbind(
                         self.prop_name, self._update_from_channel_widget)
-            self.fast_unbind('state', self._update_from_device)
+            self.funbind('state', self._update_from_device)
             return True
         return False
 
@@ -272,7 +272,7 @@ class NumericPropertyViewPort(AnalogPort):
     chan_dev_map = DictProperty({})
 
     def __init__(self, **kwargs):
-        super(ButtonViewPort, self).__init__(**kwargs)
+        super(NumericPropertyViewPort, self).__init__(**kwargs)
         self.bind(dev_map=self._reverse_dev_mapping)
         self._reverse_dev_mapping()
 
@@ -287,7 +287,7 @@ class NumericPropertyViewPort(AnalogPort):
         setattr(self.channel_widget, attr, value)
 
     def _update_from_channel_widget(self, attr, instance, value):
-        if geattr(self, attr) != value:
+        if getattr(self, attr) != value:
             self.set_state(**{attr: value})
 
     def activate(self, *largs, **kwargs):
@@ -295,10 +295,10 @@ class NumericPropertyViewPort(AnalogPort):
             if 'o' in self.direction:
                 wid = self.channel_widget
                 for attr, wid_attr in self.attr_map.items():
-                    wid.fast_bind(
+                    wid.fbind(
                         wid_attr, self._update_from_channel_widget, attr)
             for attr, wid_attr in self.attr_map.items():
-                self.fast_bind(attr, self._update_from_device, wid_attr)
+                self.fbind(attr, self._update_from_device, wid_attr)
             return True
         return False
 
@@ -308,9 +308,9 @@ class NumericPropertyViewPort(AnalogPort):
                 wid = self.channel_widget
                 if wid is not None:
                     for attr, wid_attr in self.attr_map.items():
-                        wid.fast_unbind(
+                        wid.funbind(
                             wid_attr, self._update_from_channel_widget, attr)
             for attr, wid_attr in self.attr_map.items():
-                self.fast_unbind(attr, self._update_from_device, wid_attr)
+                self.funbind(attr, self._update_from_device, wid_attr)
             return True
         return False

@@ -1,8 +1,6 @@
 '''A base class used as the base for most  Moa objects.
 '''
 
-__all__ = ('MoaBase', 'NamedMoas', 'named_moas')
-
 from re import match, compile
 from weakref import proxy
 from functools import partial
@@ -11,12 +9,12 @@ from kivy.event import EventDispatcher
 from kivy.properties import (
     StringProperty, DictProperty, ObjectProperty, AliasProperty)
 from kivy.lang import Builder
-
+from kivy.uix.behaviors.knspace import KNSpaceBehavior, knspace
 from moa.logger import MoaObjectLogger
 
-named_moas = None
-'''Highest level of all named moas.
-'''
+__all__ = ('MoaBase', )
+
+knspace.keep_ref = True
 
 valid_name_pat = compile('[_A-Za-z][_a-zA-Z0-9]*$')
 
@@ -32,83 +30,16 @@ def _moa_destructor(uid, r):
     Builder.unbind_widget(uid)
 
 
-class LevelUp(object):
-    pass
+def _get_bases(cls):
+    for base in cls.__bases__:
+        if base.__name__ == 'object':
+            break
+        yield base
+        for cbase in _get_bases(base):
+            yield cbase
 
 
-class NamedMoas(EventDispatcher):
-    '''
-    '''
-
-    moa_parent = None
-
-    def __getattribute__(self, name):
-        val = super(NamedMoas, self).__getattribute__(name)
-        if val is LevelUp:
-            return getattr(self.moa_parent, name)
-        return val
-
-    def __getattr__(self, name):
-        try:
-            return super(NamedMoas, self).__getattr__(name)
-        except AttributeError:
-            if match(valid_name_pat, name) is None:
-                raise
-            self.create_property(name, None, rebind=True, allownone=True)
-            if self.moa_parent is not None:
-                setattr(self, name, LevelUp)
-            return None
-
-    def property(self, name, quiet=False):
-        prop = super(NamedMoas, self).property(name, quiet=quiet)
-        if prop is not None or match(valid_name_pat, name) is None:
-            return prop
-        self.create_property(name, None, rebind=True, allownone=True)
-        if self.moa_parent is not None:
-            setattr(self, name, LevelUp)
-        return super(NamedMoas, self).property(name, quiet=quiet)
-
-    def new_moas(self):
-        m = NamedMoas()
-        m.moa_parent = self
-        return m
-
-    def reset_attr(self, name):
-        moas = self.moa_parent
-        if moas is None or getattr(self, name) is not LevelUp:
-            setattr(self, name, None)
-        else:
-            moas.reset_attr(name)
-
-
-class NamedMoaBehavior(object):
-    '''Should be before EventDispatcher, otherwise it eats the kwargs.
-    '''
-
-    _moas = ObjectProperty(None)
-
-    def __init__(self, moas=None, **kwargs):
-        self.moas = moas
-        super(NamedMoaBehavior, self).__init__(**kwargs)
-
-    def _get_moas(self):
-        moas = self._moas
-        if moas is not None:
-            return moas
-
-        parent = getattr(self, 'parent', None)
-        if parent is not None:
-            return getattr(parent, 'moas', named_moas)
-        return named_moas
-
-    def _set_moas(self, value):
-        self._moas = value
-
-    moas = AliasProperty(
-        _get_moas, _set_moas, bind=('_moas', ), cache=False, rebind=True)
-
-
-class MoaBase(MoaObjectLogger, NamedMoaBehavior, EventDispatcher):
+class MoaBase(MoaObjectLogger, KNSpaceBehavior, EventDispatcher):
     '''The class that is the base of many Moa classes and provides the required
     kivy properties and logging mechanisms.
 
@@ -122,9 +53,6 @@ class MoaBase(MoaObjectLogger, NamedMoaBehavior, EventDispatcher):
     _proxy_ref = None
     '''See :attr:`MoaBase.proxy_ref`.
     '''
-    _prev_name = ''
-    '''The previous name of the instance after a name change.
-    '''
     id = ''
     '''Similar to :kivy:attr:`~kivy.uix.widget.Widget.id`, the name of the
     instance when used from kv with a name.
@@ -136,6 +64,10 @@ class MoaBase(MoaObjectLogger, NamedMoaBehavior, EventDispatcher):
 
     ids = DictProperty({})
 
+    __settings_attrs__ = []
+    '''A per class list of attribute names that should be saved
+    '''
+
     def __init__(self, **kwargs):
         super(MoaBase, self).__init__(**kwargs)
         if '__no_builder' not in kwargs:
@@ -146,27 +78,19 @@ class MoaBase(MoaObjectLogger, NamedMoaBehavior, EventDispatcher):
             if argument[:3] == 'on_':
                 self.bind(**{argument: kwargs[argument]})
 
-        self.bind(name=self._verfiy_valid_name)  # consider doing this earlier
-        self._verfiy_valid_name(self, self.name)
+        self.bind(knsname=self._verfiy_valid_name)
+        self._verfiy_valid_name(self, self.knsname)
 
     def _verfiy_valid_name(self, instance, value):
         '''If it had a previous name, set it to None in
         :attr:`moa.base.named_moas`.
         Then set (and create) a property with the new name to self.
         '''
-        name = self.name
-        prev = self._prev_name
-        named_moas = self.moas
-        if prev and getattr(named_moas, prev) == self:
-            named_moas.reset_attr(prev)
-        self._prev_name = name
-        if not name:
+        if not value:
             return
-        if match(valid_name_pat, name) is None:
-            raise ValueError('"{}" is not a valid moa name. A valid '
-            'name is similar to a valid Python variable name'.format(name))
-        hasattr(named_moas, name)  # ensure the property with our name exists.
-        setattr(named_moas, name, self.proxy_ref)
+        if match(valid_name_pat, value) is None:
+            raise ValueError('"{}" is not a valid moa namespace name. A valid '
+            'name is similar to a valid Python variable name'.format(value))
 
     @property
     def proxy_ref(self):
@@ -197,18 +121,20 @@ class MoaBase(MoaObjectLogger, NamedMoaBehavior, EventDispatcher):
     def __self__(self):
         return self
 
-    name = StringProperty('')
-    '''A optional name associated with this instance.
+    @classmethod
+    def get_settings_attrs(cls):
+        attrs = []
+        for c in [cls] + list(_get_bases(cls)):
+            if not hasattr(c, '__settings_attrs__'):
+                    continue
 
-    :attr:`name` is a :kivy:class:`~kivy.properties.StringProperty` and
-    defaults to `''`. If :attr:`name` is not the empty string, the :attr:`name`
-    must have the same format as a valid python variable name. I.e. it cannot
-    start with a number and it can only contain letters, numbers, and
-    underscore.
+            for attr in c.__settings_attrs__:
+                if attr in attrs:
+                    continue
+                if not hasattr(cls, attr):
+                    raise Exception('Missing attribute <{}> in <{}>'.
+                                    format(attr, cls.__name__))
+                attrs.append(attr)
+        return attrs
 
-    Whenever name is changed to a none-empty string, that name is added as an
-    ObjectProperty to :attr:`moa.base.named_moas` and its value is set to
-    this instance. See :attr:`moa.base.named_moas` for details.
-    '''
-
-named_moas = NamedMoas()
+    name = StringProperty('')  # for backwards compat
