@@ -68,6 +68,7 @@ from __future__ import absolute_import
 __all__ = ('PriorityClockEvent', )
 
 from threading import Event
+from os import environ
 import kivy
 from kivy.clock import ClockBase, ClockEvent, _default_time, _hash
 from kivy.clock import Clock as KivyClock
@@ -280,6 +281,7 @@ def set_clock(clock='kivy'):
 
 
 Clock = KivyClock
-Clock.create_trigger_priority = Clock.create_trigger
-Clock.schedule_once_priority = Clock.schedule_once
-Clock.schedule_interval_priority = Clock.schedule_interval
+if 'KIVY_DOC_INCLUDE' not in environ:
+    Clock.create_trigger_priority = Clock.create_trigger
+    Clock.schedule_once_priority = Clock.schedule_once
+    Clock.schedule_interval_priority = Clock.schedule_interval
