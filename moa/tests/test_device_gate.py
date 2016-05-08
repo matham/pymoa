@@ -5,13 +5,16 @@ import unittest
 class RecoveryTestCase(unittest.TestCase):
 
     def test_naming(self):
-        from moa.device.gate import DigitalPort
-        names = {'food_hopper': 0, 'wire': 1, 'button': 2}
-        port = DigitalPort(attr_map=names)
-        for key in names.keys():
-            self.assert_(hasattr(port, key))
+        from moa.device.digital import DigitalPort
+        from kivy.properties import NumericProperty
+
+        class MyDigitalPort(DigitalPort):
+
+            food_hopper = NumericProperty(0)
+            wire = NumericProperty(0)
+            button = NumericProperty(0)
+
+        MyDigitalPort(attr_map={'food_hopper': 0, 'wire': 1, 'button': 2})
 
         self.assertRaises(Exception, DigitalPort, attr_map={'9wire': 10})
         self.assertRaises(Exception, DigitalPort, attr_map={'wire port': 10})
-        self.assertRaises(Exception, DigitalPort, attr_map={'attr_map': 10})
-        self.assertRaises(Exception, DigitalPort, attr_map={'name': 10})

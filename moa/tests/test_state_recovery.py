@@ -15,7 +15,7 @@ class RecoveryTestCase(unittest.TestCase):
 
     def test_recovery(self):
         from moa.app import MoaApp
-        from moa.stage.base import MoaStage
+        from moa.stage import MoaStage
         from kivy.lang import Builder
 
         class RecoveryStage(MoaStage):
@@ -52,7 +52,7 @@ class RecoveryTestCase(unittest.TestCase):
                 super(TestApp, self).__init__(**kw)
                 self.root_stage = RecoveryStage()
 
-        app = TestApp(data_directory=self.path)
+        app = TestApp(data_directory=self.path, recovery_directory=self.path)
         root = app.root_stage
         app.root_stage.d.count = app.root_stage.b.count = 10
         app.root_stage.d.finished = app.root_stage.b.finished = True
@@ -90,7 +90,7 @@ class RecoveryTestCase(unittest.TestCase):
 
         stage = RecoveryStage()
         app.load_attributes(f_named, stage=stage, recover_unnamed=True,
-                          verify_name=False)
+                            verify_name=False)
         self.assertEqual(root.b.count, stage.b.count)
         self.assertEqual(root.b.finished, stage.b.finished)
         self.assertEqual(clean_stage.d.count, stage.d.count)
