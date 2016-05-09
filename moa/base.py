@@ -69,8 +69,10 @@ class MoaBase(MoaObjectLogger, KNSpaceBehavior, EventDispatcher):
     '''
 
     def __init__(self, **kwargs):
+        builder = '__no_builder' not in kwargs
+        kwargs.pop('__no_builder', None)
         super(MoaBase, self).__init__(**kwargs)
-        if '__no_builder' not in kwargs:
+        if builder:
             Builder.apply(self)
 
         # Bind all the events.
