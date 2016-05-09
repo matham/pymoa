@@ -12,6 +12,7 @@ from kivy.factory import Factory
 
 from moa.base import MoaBase
 from moa.clock import Clock
+import moa.stage
 
 __all__ = ('MoaStage', )
 
@@ -96,7 +97,7 @@ class MoaStage(StageBase):
         if widget is self:
             raise Exception('You cannot add yourself in a MoaStage')
 
-        if isinstance(widget, (MoaStage, _MoaStageAlt)):
+        if isinstance(widget, (MoaStage, _MoaStageAlt, moa.stage.MoaStage)):
             self.add_stage(widget, index, **kwargs)
         elif not isinstance(widget, Widget):
             raise Exception('add_widget() can be used only with Widget '
@@ -112,7 +113,7 @@ class MoaStage(StageBase):
         ''' Different than widget because of None.
         '''
         stages = self.stages
-        if not isinstance(stage, (MoaStage, _MoaStageAlt)):
+        if not isinstance(stage, (MoaStage, _MoaStageAlt, moa.stage.MoaStage)):
             raise Exception('{} is not an instance of MoaStage and cannot be '
                             'added to stages'.format(stage))
         stage = stage.__self__
@@ -132,7 +133,7 @@ class MoaStage(StageBase):
             stages.insert(stage, index)
 
     def remove_widget(self, widget, **kwargs):
-        if isinstance(widget, (MoaStage, _MoaStageAlt)):
+        if isinstance(widget, (MoaStage, _MoaStageAlt, moa.stage.MoaStage)):
             self.remove_stage(widget, **kwargs)
         elif widget == self.renderer:
             self.renderer = None
