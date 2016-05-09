@@ -70,7 +70,7 @@ def decode_dict(data):
         in py3.
     '''
     rv = {}
-    for key, value in data.iteritems():
+    for key, value in data.items():
         if isinstance(key, unicode):
             key = key.encode('utf-8')
         if isinstance(value, unicode):

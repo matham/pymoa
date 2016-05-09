@@ -281,7 +281,7 @@ class NumericPropertyViewPort(AnalogPort):
             if not hasattr(self, k):
                 raise AttributeError('{} is not an attribute of {}'
                                      .format(k, self))
-        self.chan_dev_map = {v: k for k, v in self.dev_map.iteritems()}
+        self.chan_dev_map = {v: k for k, v in self.dev_map.items()}
 
     def _update_from_device(self, attr, instance, value):
         setattr(self.channel_widget, attr, value)

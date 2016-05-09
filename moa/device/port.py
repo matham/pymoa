@@ -242,7 +242,7 @@ class Port(ChannelBase):
             if not hasattr(self, k):
                 raise AttributeError('{} is not an attribute of {}'
                                      .format(k, self))
-        self.chan_attr_map = {v: k for k, v in self.attr_map.iteritems()}
+        self.chan_attr_map = {v: k for k, v in self.attr_map.items()}
 
     def activate(self, *largs, **kwargs):
         if not self.reset_state:
