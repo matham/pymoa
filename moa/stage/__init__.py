@@ -96,7 +96,7 @@ class MoaStage(StageBase):
         if widget is self:
             raise Exception('You cannot add yourself in a MoaStage')
 
-        if isinstance(widget, MoaStage):
+        if isinstance(widget, (MoaStage, _MoaStageAlt)):
             self.add_stage(widget, index, **kwargs)
         elif not isinstance(widget, Widget):
             raise Exception('add_widget() can be used only with Widget '
@@ -112,7 +112,7 @@ class MoaStage(StageBase):
         ''' Different than widget because of None.
         '''
         stages = self.stages
-        if not isinstance(stage, MoaStage):
+        if not isinstance(stage, (MoaStage, _MoaStageAlt)):
             raise Exception('{} is not an instance of MoaStage and cannot be '
                             'added to stages'.format(stage))
         stage = stage.__self__
@@ -132,7 +132,7 @@ class MoaStage(StageBase):
             stages.insert(stage, index)
 
     def remove_widget(self, widget, **kwargs):
-        if isinstance(widget, MoaStage):
+        if isinstance(widget, (MoaStage, _MoaStageAlt)):
             self.remove_stage(widget, **kwargs)
         elif widget == self.renderer:
             self.renderer = None
@@ -523,3 +523,5 @@ class MoaStage(StageBase):
     finishing = BooleanProperty(False)
     ''' If the stage is trying to finish.
     '''
+
+from moa.stage.__init__ import MoaStage as _MoaStageAlt
