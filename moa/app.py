@@ -148,7 +148,7 @@ class MoaApp(MoaBase, App):
         dir = path.abspath(path.expanduser(dir))
         fh, fn = tempfile.mkstemp(suffix='.mrec', prefix=prefix, dir=dir)
         os.close(fh)
-        d = {encoding: 'utf-8'} if PY2 else {}
+        d = {'encoding': 'utf-8'} if PY2 else {}
         with open(fn, 'w') as fh:
             json.dump(walk_stages(stage), fh, indent=2, sort_keys=True,
                       **d)
