@@ -30,15 +30,6 @@ def _moa_destructor(uid, r):
     Builder.unbind_widget(uid)
 
 
-def _get_bases(cls):
-    for base in cls.__bases__:
-        if base.__name__ == 'object':
-            break
-        yield base
-        for cbase in _get_bases(base):
-            yield cbase
-
-
 class MoaBase(MoaObjectLogger, KNSpaceBehavior, EventDispatcher):
     '''The class that is the base of many Moa classes and provides the required
     kivy properties and logging mechanisms.
@@ -63,10 +54,6 @@ class MoaBase(MoaObjectLogger, KNSpaceBehavior, EventDispatcher):
     '''
 
     ids = DictProperty({})
-
-    __settings_attrs__ = []
-    '''A per class list of attribute names that should be saved
-    '''
 
     def __init__(self, **kwargs):
         builder = '__no_builder' not in kwargs
@@ -122,21 +109,5 @@ class MoaBase(MoaObjectLogger, KNSpaceBehavior, EventDispatcher):
     @property
     def __self__(self):
         return self
-
-    @classmethod
-    def get_settings_attrs(cls):
-        attrs = []
-        for c in [cls] + list(_get_bases(cls)):
-            if not hasattr(c, '__settings_attrs__'):
-                    continue
-
-            for attr in c.__settings_attrs__:
-                if attr in attrs:
-                    continue
-                if not hasattr(cls, attr):
-                    raise Exception('Missing attribute <{}> in <{}>'.
-                                    format(attr, cls.__name__))
-                attrs.append(attr)
-        return attrs
 
     name = StringProperty('')  # for backwards compat
