@@ -5,7 +5,7 @@ Moa Stages
 ***********
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    stage.rst
    delay.rst

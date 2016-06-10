@@ -1,15 +1,14 @@
 
-
-__all__ = ('GateStage', 'DigitalGateStage', 'AnalogGateStage')
-
 from time import clock
 
-from kivy.properties import (BooleanProperty, StringProperty,
-    BoundedNumericProperty, ObjectProperty, NumericProperty,
-    ReferenceListProperty)
+from kivy.properties import (
+    BooleanProperty, StringProperty, BoundedNumericProperty, ObjectProperty,
+    NumericProperty, ReferenceListProperty)
 
 from moa.stage import MoaStage
 from moa.clock import Clock
+
+__all__ = ('GateStage', 'DigitalGateStage', 'AnalogGateStage')
 
 
 class GateStage(MoaStage):
@@ -48,7 +47,7 @@ class GateStage(MoaStage):
 
     def _port_callback(self, *largs):
         device = self.device
-        value = getattr(self.device, self.state_attr)
+        value = getattr(self.device, self.state_prop)
         last_val = self.last_state
         self.last_state = value
         if last_val == value:
@@ -137,7 +136,7 @@ class GateStage(MoaStage):
     '''The input device.
     '''
 
-    state_attr = StringProperty('state')
+    state_prop = StringProperty('state')
     ''' The name of the attr in device to bind.
     '''
 

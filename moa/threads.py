@@ -1,112 +1,16 @@
-'''Threading module.
+'''Threading
+=============
 '''
 
 from __future__ import absolute_import
 
-from collections import defaultdict, deque
+from collections import defaultdict
 from threading import RLock, Event, Thread
-try:
-    from Queue import Queue
-except ImportError:
-    from queue import Queue
 import sys
 
 from moa.clock import Clock
 
-__all__ = ('CallbackDeque', 'CallbackQueue', 'ScheduledEventLoop')
-
-
-class CallbackDeque(deque):
-    '''
-    A multithreading safe class that calls a callback whenever an item is
-    appended to the :py:attr:`deque`. Instead of having to poll or wait, you
-    could wait to get notified of additions.
-
-    :Parameters:
-        `callback`: callable
-            The function to call when adding to the queue
-
-    .. note::
-        Only :meth:`append` and :meth:`appendleft` are currently implemented.
-
-    ::
-
-        >>> def callback():
-        ...     print('Added')
-        >>> dq = CallbackDeque(callback=callback)
-        >>> dq.append('apples', 'caramel', nuts=True)
-        Added
-        >>> dq.pop()
-        ('apples', ('caramel',), {'nuts': True})
-    '''
-
-    callback = None
-
-    def __init__(self, callback, **kwargs):
-        super(CallbackDeque, self).__init__(**kwargs)
-        self.callback = callback
-
-    def append(self, x, *largs, **kwargs):
-        '''Appends `x`, and the positional and keyword args as a 3-tuple to the
-        queue.
-        '''
-        super(CallbackDeque, self).append((x, largs, kwargs))
-        self.callback()
-
-    def appendleft(self, x, *largs, **kwargs):
-        '''Appends `x`, and the positional and keyword args as a 3-tuple to the
-        left of the queue.
-        '''
-        super(CallbackDeque, self).appendleft((x, largs, kwargs))
-        self.callback()
-
-
-class CallbackQueue(Queue):
-    '''A multithreading safe class that calls a callback whenever an item is
-    placed on the :py:attr:`Queue`. Instead of having to poll or wait, you
-    could wait to get notified of additions.
-
-    The class is helpful for passing massages between the kivy thread and
-    other threads.
-
-    :Parameters:
-        `callback`: callable
-            The function to call when adding to the queue
-
-    .. note::
-        Only :meth:`put` and :meth:`get` are currently implemented.
-
-    ::
-
-        >>> def callabck():
-        ...     print('Added')
-        >>> q = KivyQueue(callabck=callabck)
-        >>> q.put('test', 55)
-        Added
-        >>> q.get()
-        ('test', 55)
-    '''
-
-    callback = None
-
-    def __init__(self, callback, **kwargs):
-        super(CallbackQueue, self).__init__(**kwargs)
-        self.callback = callback
-
-    def put(self, key, val):
-        '''Adds the (key, value) tuple to the queue and calls the callback
-        function. The call is non-blocking.
-        '''
-        super(CallbackQueue, self).put((key, val), False)
-        self.callback()
-
-    def get(self):
-        '''Returns the next tuple item in the queue, if non-empty, otherwise a
-        :py:attr:`Queue.Empty` exception is raised.
-
-        The call is non-blocking.
-        '''
-        return super(CallbackQueue, self).get(False)
+__all__ = ('ScheduledEvent', 'ScheduledEventLoop')
 
 
 class ScheduledEvent(object):
@@ -118,11 +22,23 @@ class ScheduledEvent(object):
     '''Whether the event is a one time shot, or repeats until removed.
     Applies whether :attr:`trigger` is True or False.
     '''
+
+    kw_in = 'kw_in'
+    '''When calling the :attr:`callback`, if :attr:`trigger` was False
+    :attr:`func_kwargs` is passed back to the :attr:`callback` using the
+    keyword name :attr:`kw_in`.
+    '''
+
     func_kwargs = {}
-    '''The kw args passed to the :attr:`name` function. '''
+    '''The keyword args passed to the :attr:`name` function when it's executed.
+    '''
+
     callback = None
-    '''The callback function to be executed from the kivy event loop after
-    the scheduled method has been executed. '''
+    '''After the scheduled method :attr:`name` has been executed,
+    :attr:`callback` is the callback function to be executed from the kivy
+    event loop with the execution result.
+    '''
+
     scheduled_callbacks = []
     '''List of callbacks for this event scheduled to be executed by the kivy
     thread. These notify the original scheduler that the event completed.
@@ -131,28 +47,35 @@ class ScheduledEvent(object):
     :attr:`name`, followed by the :class:`ScheduledEvent` that caused the
     execution.
     '''
+
     trigger = True
-    '''Whether this event is a trigger event. With `trigger` True the event is
+    '''Whether this event is a trigger event.
+
+    With `trigger` True the event is
     a normal event. If :attr:`trigger` is False, then the event will not
     execute on its own, but will listen to other events associated with
     the same method. That is, it will get callbacks for every execution of
-    the method :attr:`name`.
+    the method :attr:`name` and :attr:`obj` that match this one.
 
     Also, if `trigger` is False, :attr:`callback` will get a keyword argument
-    called event, which is the instance of this class that caused the callback.
+    called :attr:`kw_in`, which is the :attr:`func_kwargs`.
     '''
+
     obj = None
     '''The object with the method :attr:`name` which will be called from the
-    event loop thread. None means it's a not a method but a function.
+    event loop thread. None means :attr:`name` is a not a method but a
+    function.
     '''
+
     name = ''
     '''The name of the method associated with this event. See
     :meth:`ScheduledEventLoop.request_callback`. If :attr:`obj` is None then
-    this is an actual function.
+    this is an actual function, otherwise :attr:`name` is a method of object
+    :attr:`obj`.
     '''
 
     def __init__(self, callback=None, func_kwargs={}, repeat=False,
-                 trigger=False, obj=None, name=''):
+                 trigger=False, obj=None, name='', kw_in='kw_in'):
         self.callback = callback
         self.func_kwargs = func_kwargs
         self.repeat = repeat
@@ -160,26 +83,22 @@ class ScheduledEvent(object):
         self.trigger = trigger
         self.name = name
         self.obj = obj
+        self.kw_in = kw_in
 
 
 class ScheduledEventLoop(object):
-    '''This class provides a scheduling mechanism though which methods of this
-    class or a object associated with this class (:attr:`target`) are executed
-    from an internal thread. This eases execution of methods outside the
-    main system thread. After execution, if set, the main
-    thread executes a callback using the execution results.
+    '''This class provides a scheduling mechanism though which functions are
+    executed from an internal thread specific to this instance. This eases
+    execution of methods outside the main system thread. After execution, if
+    set, the main (Kivy) thread executes a callback using the execution result.
 
-    The class is meant to be used with a main thread, e.g. the kivy thread
-    such that the a thread adds a new method to be executed. After the method
-    is executed, the main thread receives the results of the execution and
-    calls a callback with the results.
+    The class also deals with exceptions transparently using
+    :meth:`handle_exception`.
 
     :Parameters:
 
-        `target`: object
-            See :attr:`target`
         `daemon`: bool
-            See :attr:`_daemon`. Defaults to False.
+            Whether the internal thread is a daemon thread. Defaults to False.
 
     For example::
 
@@ -199,8 +118,8 @@ class ScheduledEventLoop(object):
 
             def handle_exception(self, exception, event):
                 e, trace = exception
-                print('got exception "{}" for event with name "{}" and kwargs "{}"'.
-                      format(e, event.name, event.func_kwargs))
+                print('got exception "{}" for event with name "{}" and kwargs'
+                    ' "{}"'.format(e, event.name, event.func_kwargs))
                 # exit thread
                 return False
 
@@ -253,14 +172,8 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
     _daemon = False
     '''Whether the internal thread is a daemon thread.
     '''
-    target = None
-    '''An object, the methods of which will be executed in the internal thread.
-    :meth:`request_callback` requests a method to be executed. The method
-    can be a method of a class co-inherited from :class:`ScheduledEventLoop`,
-    or a method of the object in target.
-    '''
 
-    def __init__(self, target=None, daemon=False, **kwargs):
+    def __init__(self, daemon=False, **kwargs):
         super(ScheduledEventLoop, self).__init__(**kwargs)
         self._daemon = daemon
         self.__callback_lock = RLock()
@@ -268,7 +181,6 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
         self.__callbacks = defaultdict(list)
         self._kivy_trigger = Clock.create_trigger_priority(
             self._service_main_thread)
-        self.target = target
         self.start_thread()
 
     def clear_events(self):
@@ -292,6 +204,9 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
 
         This method is not multi-threading safe with :meth:`stop_thread`, so
         it should only be called from the main kivy thread.
+
+        :meth:`start_thread` is automatically called when the instance is
+        created.
         '''
         if self.__thread is not None:
             return
@@ -313,11 +228,19 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
 
             `join`: bool
                 If True, the calling thread will join the thread until it
-                exits.
+                exits. Defaults to False.
+            `timeout`: float, int
+                When ``join`` is True, ``timeout`` is how long to wait on the
+                thread to die before continuing. Defaults to None (i.e. never
+                time out).
+            `clear`: bool
+                If True, :meth:`clear` is called automatically. Defaults
+                to True.
 
         :returns:
 
-            True if killed the thread.
+            True if the thread is dead, False if otherwise (e.g. if it timed
+            out).
         '''
         self.__signal_exit = True
         self.__thread_event.set()
@@ -333,13 +256,14 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
         return True
 
     def handle_exception(self, exception, event):
-        ''' Called from the internal thread when the method executed within the
-        thread raised an exception.
+        ''' Called from the internal thread when the function executed within
+        the thread raises an exception. It should be overwritten by the derived
+        class.
 
         :Parameters:
 
             `exception`: 2-tuple
-                tuple of the Exception and `sys.exc_info()`.
+                tuple of the Exception (``e``) and ``sys.exc_info()``.
             `event`: :class:`ScheduledEvent`
                 The event that caused the exception. None if the error is not
                 associated with an event.
@@ -352,33 +276,37 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
         pass
 
     def request_callback(self, name, callback=None, trigger=True,
-                         repeat=False, obj=None, **kwargs):
-        '''Adds a callback to be executed by the internal thread.
+                         repeat=False, obj=None, kw_in='kw_in', **kwargs):
+        '''Adds a function to be executed by the internal thread.
         See :class:`ScheduledEvent`.
 
         :Parameters:
 
             `name`: str
-                The name of the class or :attr:`target` method which will
-                be executed from the internal thread. See :attr:`target` and
-                :attr:`ScheduledEvent.name`
+                If ``obj`` is None, it's the function, otherwise it's the name
+                of ``obj`` 's method which will be executed from the internal
+                thread. See :attr:`ScheduledEvent.name`.
             `callback`: object
                 A callback function which will be called by the main (kivy)
                 thread with the results of the method `name` as executed by
-                the internal thread. If `trigger` is False, the method will
-                get a keyword argument `event`, which is the instance of
-                :class:`ScheduledEvent` that caused the callback.
+                the internal thread.
 
-                If None, no callback will be called.
+                If `trigger` is False, the method will get a keyword argument
+                named as the value of ``kw_in``, which is ``kwargs``. See
+                :attr:`ScheduledEvent.func_kwargs`
+
+                If None, no callback will be called. Defaults to None.
             `trigger`: bool
-                See :attr:`ScheduledEvent.trigger`.
+                See :attr:`ScheduledEvent.trigger`. Defaults to True.
             `repeat`: bool
-                See :attr:`ScheduledEvent.repeat`.
+                See :attr:`ScheduledEvent.repeat`. Defaults to False.
             `obj`: object or None
                 See :attr:`ScheduledEvent.obj`. Defaults to None.
+            `kw_in`: str
+                See :attr:`ScheduledEvent.kw_in`. Defaults to ``'kw_in'``.
             `**kwargs`:
-                The caught keyword arguments that will be passed to the method
-                `name`. See :attr:`ScheduledEvent.func_kwargs`.
+                The caught keyword arguments that will be passed to the
+                function ``name``. See :attr:`ScheduledEvent.func_kwargs`.
 
         :Returns:
             A instance of :class:`ScheduledEvent`.
@@ -390,7 +318,7 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
         '''
         ev = ScheduledEvent(
             callback=callback, func_kwargs=kwargs, repeat=repeat,
-            trigger=trigger, obj=obj, name=name)
+            trigger=trigger, obj=obj, name=name, kw_in=kw_in)
         with self.__callback_lock:
             self.__callbacks[name].append(ev)
         if trigger:
@@ -406,8 +334,8 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
 
         :Parameters:
 
-            `name`: str
-                The name of the method. This should be the same as the `name`
+            `name`: str or callable.
+                The name of the method. This should be the same as the ``name``
                 used in :meth:`request_callback`.
             `event`: :class:`ScheduledEvent`
                 The scheduled event returned by :meth:`request_callback`.
@@ -481,7 +409,7 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
                     if ev.trigger:
                         f(result)
                     else:
-                        f(result, kw_in=event.func_kwargs)
+                        f(result, **{event.kw_in: event.func_kwargs})
 
                 if not ev.repeat:
                     try:

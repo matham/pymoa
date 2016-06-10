@@ -1,11 +1,13 @@
-'''Modules to ease compatibility between different versions of python and
+'''Compatibility
+==================
+
+Modules to ease compatibility between different versions of python and
 types.
 '''
 
-__all__ = ('decode_dict', 'PY2', 'unicode_type', 'bytes_type')
-
-
 import sys
+
+__all__ = ('decode_dict', 'PY2', 'unicode_type', 'bytes_type')
 
 PY2 = sys.version_info[0] == 2
 '''Whether the python version is 2.x (True), or 3.x (False).
@@ -13,23 +15,68 @@ PY2 = sys.version_info[0] == 2
 
 
 def unicode_type(val):
-    ''' Converts `val` to `unicode` type. If the default encoding fails, it
-    tries with `utf8`.
+    ''' Converts ``val`` to ``unicode`` type.
+
+    For example in Python 2::
+
+        >>> unicode_type(55)
+        u'55'
+        >>> unicode_type(b'hey')
+        u'hey'
+        >>> unicode_type(u'hey')
+        u'hey'
+
+    and in Python 3::
+
+        >>> unicode_type(55)
+        '55'
+        >>> unicode_type(b'hey')
+        'hey'
+        >>> unicode_type(u'hey')
+        'hey'
     '''
-    try:
-        return (unicode if PY2 else str)(val)
-    except UnicodeDecodeError:
+    if isinstance(val, bytes):
         return val.decode('utf8')
+    if PY2:
+        if isinstance(val, unicode):
+            return val
+    elif isinstance(val, str):
+        return val
+    return (unicode if PY2 else str)(val)
 
 
 def bytes_type(val):
-    ''' Converts `val` to `bytes` type. If the default encoding fails, it
-    tries with `utf8`.
+    ''' Converts ``val`` to ``bytes`` type.
+
+    For example in Python 2::
+
+        >>> bytes_type(55)
+        '55'
+        >>> bytes_type(b'hey')
+        'hey'
+        >>> bytes_type(u'hey')
+        'hey'
+
+    and in Python 3::
+
+        >>> bytes_type(55)
+        b'55'
+        >>> bytes_type(b'hey')
+        b'hey'
+        >>> bytes_type(u'hey')
+        b'hey'
     '''
-    try:
-        return bytes(val)
-    except UnicodeEncodeError:
+    if isinstance(val, bytes):
+        return val
+    if PY2:
+        if isinstance(val, unicode):
+            return val.encode('utf8')
+    elif isinstance(val, str):
         return val.encode('utf8')
+
+    if PY2:
+        return str(val)
+    return str(val).encode('utf8')
 
 
 def _decode_list(data):
@@ -48,8 +95,8 @@ def _decode_list(data):
 
 
 def decode_dict(data):
-    '''Method which takes a dict `data` and recursively converts it keys/values
-    that are unicode objects to bytes objects.
+    '''Method which takes a dict `data` and recursively converts its
+    keys/values that are unicode objects to bytes objects.
 
     This is typically used with json. See
     https://stackoverflow.com/questions/956867.
@@ -57,7 +104,8 @@ def decode_dict(data):
     E.g.::
 
         >>> import json
-        >>>d_dump = json.dumps({'a': 55, 'b': '33', 4: {1: 'a'}, 8: ['a', 'b']})
+        >>> d_dump = json.dumps({'a': 55, 'b': '33', 4: {1: 'a'},
+        ... 8: ['a', 'b']})
         >>> d_dump
         '{"a": 55, "8": ["a", "b"], "b": "33", "4": {"1": "a"}}'
         >>> json.loads(d_dump)

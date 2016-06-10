@@ -15,6 +15,3 @@ To install https://matham.github.io/moa/installation.html
 .. image:: https://img.shields.io/pypi/v/moa.svg
     :target: https://pypi.python.org/pypi/moa/
     :alt: Latest Version on PyPI
-
-Usage example
--------------

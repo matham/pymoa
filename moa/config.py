@@ -1,8 +1,9 @@
-'''Config module based on the kivy :kivy:class:`~kivy.config.ConfigParser`.
+'''Configuration
+=================
+
+Config module based on the kivy :class:`~kivy.config.ConfigParser`.
 It defines a :attr:`Config` class used to configure Moa.
 '''
-
-__all__ = ('Config', 'ConfigParser')
 
 from os import environ
 from os.path import isfile
@@ -12,11 +13,13 @@ from kivy.config import ConfigParser as KivyConfigParser
 from moa.logger import logger_config_update, Logger
 from moa import moa_config_fn
 
+__all__ = ('Config', 'ConfigParser')
+
 # Version number of current configuration format
 MOA_CONFIG_VERSION = 1
 
 Config = None
-'''Moa configuration object. Its kivy::attr:`~kivy.config.ConfigParser.name` is
+'''Moa configuration object. Its :attr:`~kivy.config.ConfigParser.name` is
 `'moa'`.
 
 The config file named `moa_config.ini` is placed in the same home directory as
@@ -35,12 +38,12 @@ Available configuration tokens
 
 class ConfigParser(KivyConfigParser):
     '''Config parser class. Currently it is identical to
-    :kivy:class:`~kivy.config.ConfigParser`.
+    :class:`~kivy.config.ConfigParser`.
     '''
     pass
 
 
-if not environ.get('MOA_DOC_INCLUDE'):
+if not environ.get('KIVY_DOC_INCLUDE'):
     # Create default configuration
     Config = ConfigParser(name='moa')
     Config.add_callback(logger_config_update, 'moa', 'log_level')
@@ -97,4 +100,4 @@ if not environ.get('MOA_DOC_INCLUDE'):
             Config.filename = moa_config_fn
             Config.write()
         except Exception as e:
-            Logger.exception('Core: Error while saving default config file')
+            Logger.exception('Moa: Error while saving default config file')

@@ -1,0 +1,21 @@
+#:import knspace kivy.uix.behaviors.knspace.knspace
+#:import ButtonChannel moa.device.digital.ButtonChannel
+#:import NumericPropertyChannel moa.device.analog.NumericPropertyChannel
+
+<RootStage>:
+    on_stage_start: knspace.status.text = 'Started'
+    on_stage_end: knspace.status.text = 'Finished'
+    Delay:
+        on_stage_start: knspace.status.text = 'Delay {}'.format(self.delay)
+        delay: 10.1
+    DigitalGateStage:
+        on_stage_start: knspace.status.text = 'Press for 1.5s'
+        exit_state: True
+        use_initial: False
+        device: ButtonChannel(button=knspace.photobeam)
+        hold_time: 1.5
+    AnalogGateStage:
+        on_stage_start: knspace.status.text = 'Enter 3.14'
+        range: 3.13, 3.15
+        device: NumericPropertyChannel(channel_widget=knspace.amps, prop_name='value')
+        hold_time: .1

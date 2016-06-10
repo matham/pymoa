@@ -1,11 +1,15 @@
-'''Instances of :mod:`~moa.device.port` that represent Digital devices.
-'''
+'''Digital Port
+=================
 
-__all__ = ('DigitalChannel', 'DigitalPort', 'ButtonChannel', 'ButtonPort')
+Instances of :mod:`~moa.device.port` that represent Digital devices.
+'''
 
 from kivy.properties import BooleanProperty, ObjectProperty, DictProperty
 from moa.device.port import Channel, Port
 from time import clock
+
+__all__ = ('DigitalChannel', 'DigitalPort', 'ButtonChannel', 'ButtonPort',
+           'ButtonViewChannel', 'ButtonViewPort')
 
 
 class DigitalChannel(Channel):
@@ -15,7 +19,7 @@ class DigitalChannel(Channel):
     state = BooleanProperty(None, allownone=True)
     '''The state of the channel.
 
-    :attr:`state` is a :kivy:class:`~kivy.properties.BooleanProperty` and
+    :attr:`state` is a :class:`~kivy.properties.BooleanProperty` and
     defaults to None.
     '''
 
@@ -60,7 +64,7 @@ class DigitalPort(Port):
 
 class ButtonChannel(DigitalChannel):
     '''A device which represents the state of a Kivy
-    :kivy:class:`~kivy.uix.behaviors.ButtonBehavior`.
+    :class:`~kivy.uix.behaviors.ButtonBehavior`.
 
     For example::
 
@@ -86,7 +90,7 @@ class ButtonChannel(DigitalChannel):
     '''
 
     button = ObjectProperty(None)
-    '''The :kivy:class:`~kivy.uix.behaviors.ButtonBehavior` derived instance
+    '''The :class:`~kivy.uix.behaviors.ButtonBehavior` derived instance
     controlled/read by the channel.
     '''
 
@@ -110,16 +114,30 @@ class ButtonChannel(DigitalChannel):
         return False
 
     def set_state(self, state, **kwargs):
-        '''Sets the state of the underlying :attr:`button`. See
-        :meth:`DigitalChannel.set_state` for details.
-        '''
         self.button.state = 'down' if state else 'normal'
 
 
 class ButtonViewChannel(DigitalChannel):
+    '''Device that uses a :class:`~kivy.uix.behaviors.ButtonBehavior` type
+    widget to control or reflect the state of an actual hardware device.
+
+    :class:`ButtonViewChannel` is very similar to :class:`ButtonChannel`,
+    except that for :class:`ButtonChannel` its only purpose is to have
+    :attr:`~DigitalChannel.state` reflect the state of a button while for
+    :class:`ButtonViewChannel` the purpose is for the button to visualize
+    and control the state of an external device reflected in
+    :attr:`~DigitalChannel.state`.
+
+    That is for :class:`ButtonViewChannel`, :meth:`DigitalChannel.set_state`
+    needs to be overwritten by the derived class to update the hardware
+    and when the hardware changes :attr:`~DigitalChannel.state` should be
+    updated. However, in addition, the button will automatically be
+    updated to reflect that state and when the button's state changes
+    it'll trigger a call to :meth:`DigitalChannel.set_state`.
+    '''
 
     button = ObjectProperty(None)
-    '''The :kivy:class:`~kivy.uix.behaviors.ButtonBehavior` derived instance
+    '''The :class:`~kivy.uix.behaviors.ButtonBehavior` derived instance
     controlled/read by the channel.
     '''
 
@@ -156,7 +174,7 @@ class ButtonViewChannel(DigitalChannel):
 
 class ButtonPort(DigitalPort):
     '''A device which represents the state of multiple Kivy
-    :kivy:class:`~kivy.uix.behaviors.ButtonBehavior` buttons.
+    :class:`~kivy.uix.behaviors.ButtonBehavior` buttons.
 
     .. note::
         For this class the values in :attr:`~moa.device.port.Port.attr_map`
@@ -215,9 +233,6 @@ self.text, self.state))
         return False
 
     def set_state(self, high=[], low=[], **kwargs):
-        '''Sets the state of the underlying buttons. See
-        :meth:`DigitalPort.set_state` for details.
-        '''
         attr_map = self.attr_map
         for attr in high:
             attr_map[attr].state = 'down'
@@ -226,10 +241,46 @@ self.text, self.state))
 
 
 class ButtonViewPort(DigitalPort):
+    '''Device that uses :class:`~kivy.uix.behaviors.ButtonBehavior` type
+    widgets to control or reflect the states of an multi-channel hardware
+    device.
+
+    :class:`ButtonViewPort` is very similar to :class:`ButtonPort`,
+    except that for :class:`ButtonPort` its only purpose is to have
+    the port states reflect the states of the buttons while for
+    :class:`ButtonViewPort` the purpose is for the buttons to visualize
+    and control the states of the external device reflected in
+    the properties.
+
+    That is for :class:`ButtonViewPort`, :meth:`DigitalPort.set_state`
+    needs to be overwritten by the derived class to update the hardware
+    and when the hardware changes the properties should be
+    updated. However, in addition, the buttons will automatically be
+    updated to reflect that state and when the buttons' state changes
+    it'll trigger a call to :meth:`DigitalPort.set_state`.
+
+    .. note::
+        For this class the values in :attr:`~moa.device.port.Port.attr_map`
+        should be set to the buttons visualizing the channels.
+
+        However, since this channel also controls hardware that would require
+        :attr:`~moa.device.port.Port.attr_map` for mapping the property names
+        to the hardware channel ports or similar, :attr:`dev_map` and
+        :attr:`chan_dev_map` has been added as a secondary mapping for this
+        purpose.
+    '''
 
     dev_map = DictProperty({})
+    '''A secondary mapping of property names to channel numbers etc to be used
+    by the derived classes instead of :attr:`~moa.device.port.Port.attr_map`
+    because :attr:`~moa.device.port.Port.attr_map` is used to map the buttons
+    to property names.
+    '''
 
     chan_dev_map = DictProperty({})
+    '''The inverse mapping of :attr:`dev_map`. It is automatically
+    generated and is read only.
+    '''
 
     def __init__(self, **kwargs):
         super(ButtonViewPort, self).__init__(**kwargs)

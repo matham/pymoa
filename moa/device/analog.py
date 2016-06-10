@@ -1,15 +1,18 @@
-'''Instances of :mod:`~moa.device.port` that represent analog input/output
+'''Analog Port
+=================
+
+Instances of :mod:`~moa.device.port` that represent analog input/output
 devices.
 '''
-
-__all__ = ('AnalogChannel', 'AnalogPort', 'NumericPropertyChannel',
-           'NumericPropertyPort')
 
 from kivy.properties import (
     NumericProperty, ObjectProperty, StringProperty, DictProperty)
 from moa.device.port import Channel, Port
 from functools import partial
 from time import clock
+
+__all__ = ('AnalogChannel', 'AnalogPort', 'NumericPropertyChannel',
+           'NumericPropertyPort')
 
 
 class AnalogChannel(Channel):
@@ -19,7 +22,7 @@ class AnalogChannel(Channel):
     state = NumericProperty(None, allownone=True)
     '''The state of the channel.
 
-    :attr:`state` is a :kivy:class:`~kivy.properties.NumericProperty` and
+    :attr:`state` is a :class:`~kivy.properties.NumericProperty` and
     defaults to None.
     '''
 
@@ -64,7 +67,7 @@ class AnalogPort(Port):
 
 class NumericPropertyChannel(AnalogChannel):
     '''A class that represents a analog channel by the
-    :kivy:class:`~kivy.properties.NumericProperty` of a widget.
+    :class:`~kivy.properties.NumericProperty` of a widget.
 
     For example::
 
@@ -94,12 +97,12 @@ prop_name='value')
     '''
 
     channel_widget = ObjectProperty(None)
-    '''The widget whose :kivy:class:`~kivy.properties.NumericProperty`
+    '''The widget whose :class:`~kivy.properties.NumericProperty`
     the channels is bound to.
     '''
 
     prop_name = StringProperty('')
-    '''The name of the :kivy:class:`~kivy.properties.NumericProperty` in
+    '''The name of the :class:`~kivy.properties.NumericProperty` in
     widget :attr:`channel_widget` that represents the analog channel.
     '''
 
@@ -124,21 +127,41 @@ prop_name='value')
         return False
 
     def set_state(self, state, **kwargs):
-        '''Sets the value of the underlying property :attr:`prop_name`. See
-        :meth:`AnalogChannel.set_state` for details.
-        '''
         setattr(self.channel_widget, self.prop_name, state)
 
 
 class NumericPropertyViewChannel(AnalogChannel):
+    '''Device that the :class:`~kivy.properties.NumericProperty` of a widget to
+    control or reflect the state of an actual analog hardware device.
+
+    :class:`NumericPropertyViewChannel` is very similar to
+    :class:`NumericPropertyChannel`,
+    except that for :class:`NumericPropertyChannel` its only purpose is to have
+    :attr:`~AnalogChannel.state` reflect the state of the
+    :class:`~kivy.properties.NumericProperty` of the button while for
+    :class:`NumericPropertyViewChannel` the purpose is for the
+    :class:`~kivy.properties.NumericProperty` to visualize
+    and control the state of an external device reflected in
+    :attr:`~AnalogChannel.state`.
+
+    That is for :class:`NumericPropertyViewChannel`,
+    :meth:`AnalogChannel.set_state` needs to be overwritten by the derived
+    class to update the hardware and when the hardware changes
+    :attr:`~AnalogChannel.state` should be
+    updated. However, in addition, the
+    :class:`~kivy.properties.NumericProperty` will automatically be
+    updated to reflect that state and when the widget's
+    :class:`~kivy.properties.NumericProperty` changes
+    it'll trigger a call to :meth:`AnalogChannel.set_state`.
+    '''
 
     channel_widget = ObjectProperty(None)
-    '''The widget whose :kivy:class:`~kivy.properties.NumericProperty`
+    '''The widget whose :class:`~kivy.properties.NumericProperty`
     the channels is bound to.
     '''
 
     prop_name = StringProperty('')
-    '''The name of the :kivy:class:`~kivy.properties.NumericProperty` in
+    '''The name of the :class:`~kivy.properties.NumericProperty` in
     widget :attr:`channel_widget` that represents the analog channel.
     '''
 
@@ -160,7 +183,8 @@ class NumericPropertyViewChannel(AnalogChannel):
         return False
 
     def deactivate(self, *largs, **kwargs):
-        if super(NumericPropertyViewChannel, self).deactivate(*largs, **kwargs):
+        if super(NumericPropertyViewChannel, self).deactivate(*largs,
+                                                              **kwargs):
             if 'o' in self.direction:
                 widget = self.channel_widget
                 if widget is not None:
@@ -173,12 +197,12 @@ class NumericPropertyViewChannel(AnalogChannel):
 
 class NumericPropertyPort(AnalogPort):
     '''A class that represents multiple analog channels with multiple
-    :kivy:class:`~kivy.properties.NumericProperty` instances of a widget.
+    :class:`~kivy.properties.NumericProperty` instances of a widget.
 
     .. note::
         For this class the values in :attr:`~moa.device.port.Port.attr_map`
         should be set to the names of the
-        :kivy:class:`~kivy.properties.NumericProperty` instances underlying the
+        :class:`~kivy.properties.NumericProperty` instances underlying the
         channels. Similar to the single channel name
         :attr:`NumericPropertyChannel.prop_name`.
 
@@ -223,6 +247,7 @@ class NumericPropertyPort(AnalogPort):
     '''Similar to :attr:`NumericPropertyChannel.channel_widget`, the widget
     that contains the properties simulating the analog channels.
     '''
+
     _widget_callbacks = []
     '''Stores the property callbacks bound when activating the channels.
     '''
@@ -254,9 +279,6 @@ class NumericPropertyPort(AnalogPort):
         return False
 
     def set_state(self, **kwargs):
-        '''Sets the state of the underlying properties. See
-        :meth:`AnalogPort.set_state` for details.
-        '''
         attr_map = self.attr_map
         widget = self.channel_widget
         for attr, value in kwargs.items():
@@ -264,12 +286,58 @@ class NumericPropertyPort(AnalogPort):
 
 
 class NumericPropertyViewPort(AnalogPort):
+    '''A class that represents multiple analog channels with multiple
+    :class:`~kivy.properties.NumericProperty` instances of a widget.
+
+    :class:`NumericPropertyViewPort` is very similar to
+    :class:`NumericPropertyPort`,
+    except that for :class:`NumericPropertyPort` its only purpose is to have
+    the port states reflect the states of the
+    :class:`~kivy.properties.NumericProperty` instances while for
+    :class:`NumericPropertyViewPort` the purpose is for the
+    :class:`~kivy.properties.NumericProperty` instances to visualize
+    and control the states of the external device reflected in
+    the properties.
+
+    That is for :class:`NumericPropertyViewPort`, :meth:`AnalogPort.set_state`
+    needs to be overwritten by the derived class to update the hardware
+    and when the hardware changes the properties should be
+    updated. However, in addition, the widget's
+    :class:`~kivy.properties.NumericProperty` instances will automatically be
+    updated to reflect that state and when the
+    :class:`~kivy.properties.NumericProperty` instances change
+    it'll trigger a call to :meth:`AnalogPort.set_state`.
+
+    .. note::
+         For this class the values in :attr:`~moa.device.port.Port.attr_map`
+        should be set to the names of the
+        :class:`~kivy.properties.NumericProperty` instances underlying the
+        channels. Similar to the single channel name
+        :attr:`NumericPropertyChannel.prop_name`.
+
+        However, since this channel also controls hardware that would require
+        :attr:`~moa.device.port.Port.attr_map` for mapping the property names
+        to the hardware channel ports or similar, :attr:`dev_map` and
+        :attr:`chan_dev_map` has been added as a secondary mapping for this
+        purpose.
+    '''
 
     channel_widget = ObjectProperty(None)
+    '''Similar to :attr:`NumericPropertyChannel.channel_widget`, the widget
+    that contains the properties simulating the analog channels.
+    '''
 
     dev_map = DictProperty({})
+    '''A secondary mapping of property names to channel numbers etc to be used
+    by the derived classes instead of :attr:`~moa.device.port.Port.attr_map`
+    because :attr:`~moa.device.port.Port.attr_map` is used to map the widget's
+    properties to property names.
+    '''
 
     chan_dev_map = DictProperty({})
+    '''The inverse mapping of :attr:`dev_map`. It is automatically
+    generated and is read only.
+    '''
 
     def __init__(self, **kwargs):
         super(NumericPropertyViewPort, self).__init__(**kwargs)

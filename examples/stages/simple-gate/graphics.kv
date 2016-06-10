@@ -1,0 +1,36 @@
+
+<NamedButton@KNSpaceBehavior+Button>
+<NamedTextInput@KNSpaceBehavior+TextInput>
+<NamedLabel@KNSpaceBehavior+Label>
+
+
+<RootWidget>:
+    Button:
+        size_hint: None, None
+        size: self.texture_size
+        padding: '15dp', '15dp'
+        text: 'Start Experiment'
+        on_release:
+            self.disabled = True
+            app.start_experiment()
+    NamedButton:
+        knsname: 'photobeam'
+        size_hint: None, None
+        size: self.texture_size
+        padding: '15dp', '15dp'
+        text: 'Photobeam'
+    NamedTextInput:
+        knsname: 'amps'
+        size_hint: None, None
+        size: '100dp', self.minimum_height
+        padding: '15dp'
+        input_filter: 'float'
+        value: float(self.text) if self.text else 0.
+        hint_text: 'Amps'
+    NamedLabel:
+        knsname: 'status'
+        size_hint: None, None
+        size: self.texture_size
+        padding: '15dp', '15dp'
+
+

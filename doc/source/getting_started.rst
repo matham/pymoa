@@ -11,3 +11,9 @@ on how to use it. You can find the complete documentation at :ref:`moa-api`.
 Following is a simple example::
 
     >>> example
+
+Things to Know
+---------------
+
+* Experiments need to run through the Kivy event loop.
+* Moa's Clock has priorities.

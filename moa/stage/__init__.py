@@ -1,12 +1,20 @@
-'''
-TODO: when completion_type is any, save the one that initiated the stop
+'''Stages
+==========
+
+A stage is fundamental to an experiment. A stage typically describes an epoch
+during an experiment when something happens or when we wait for something to
+happen. An experiment is composed of many stages.
+
+A stage can contain other stages.
 '''
 
 import time
+from functools import partial
 
-from kivy.properties import (BooleanProperty, NumericProperty, StringProperty,
+from kivy.properties import (
+    BooleanProperty, NumericProperty, StringProperty,
     OptionProperty, BoundedNumericProperty, ReferenceListProperty,
-    ObjectProperty, ListProperty, AliasProperty)
+    ObjectProperty, ListProperty, AliasProperty, DictProperty)
 from kivy.uix.widget import Widget
 from kivy.factory import Factory
 
@@ -17,18 +25,9 @@ import moa.stage
 __all__ = ('MoaStage', )
 
 
-def _get_bases(cls):
-    for base in cls.__bases__:
-        if base.__name__ == 'object':
-            break
-        yield base
-        for cbase in _get_bases(base):
-            yield cbase
-
-
 class StageMetaclass(type):
     '''Metaclass to automatically register new stage classes with the
-    :kivy:class:`~kivy.factory.Factory`.
+    :class:`~kivy.factory.Factory`.
 
     .. warning::
         This metaclass is used by MoaStage. Do not use it directly!
@@ -40,58 +39,31 @@ class StageMetaclass(type):
 StageBase = StageMetaclass('StageBase', (MoaBase, ), {})
 
 
+def _ask_step_stage(obj, dt, **kwargs):
+    obj.step_stage(**kwargs)
+
+
 class MoaStage(StageBase):
+    '''
+    '''
+
+    __events__ = ('on_stage_start', 'on_trial_start', 'on_trial_end',
+                  'on_stage_end')
 
     __metaclass__ = StageMetaclass
 
-    __recovery_attrs__ = ('disabled', 'finished', 'paused', 'count')
-
-    _cls_attrs = None
-
-    _pause_list = []
+    pause_list = ListProperty([])
     ''' The list of children this stage paused and we therefore need to unpause
     them after this stage becomes unpaused. Children stages that were already
     paused when the stage paused do not have to be unpaused.
     '''
+
     _loop_finishing = BooleanProperty(False)
-    # whether this loop iteratioon is force stopped. loop_done is true only
-    # the stage loop itelf completed, but maybe not the substages.
-    # when this is true, the substages are force stopped.
+    '''Whether this loop iteratioon is force stopped. loop_done is true only
+    the stage loop itelf completed, but maybe not the substages.
+    when this is true, the substages are force stopped.'''
 
-    def __init__(self, **kwargs):
-        super(MoaStage, self).__init__(**kwargs)
-        cls_inst = self.__class__
-        if cls_inst._cls_attrs is None:
-            cls_inst._cls_attrs = attrs = []
-            for cls in [cls_inst] + list(_get_bases(cls_inst)):
-                if not hasattr(cls, '__recovery_attrs__'):
-                    continue
-
-                for attr in cls.__recovery_attrs__:
-                    if attr in attrs:
-                        continue
-                    if not hasattr(self, attr):
-                        raise Exception('Missing attribute <{}> in <{}>'.
-                                        format(attr, cls_inst.__name__))
-                    attrs.append(attr)
-        self._pause_list = []
-
-    def dump_attributes(self, state=None):
-        attrs = self.__class__._cls_attrs
-        exclude = self.exclude_attrs
-        if state is None:
-            state = {}
-        for attr in attrs:
-            if attr not in exclude:
-                state[attr] = getattr(self, attr)
-        return state
-
-    def load_attributes(self, state):
-        exclude = self.exclude_attrs
-        self.clear()
-        for attr, value in state.items():
-            if attr not in exclude:
-                setattr(self, attr, value)
+    _within_step_stage = False
 
     def add_widget(self, widget, index=None, **kwargs):
         if widget is self:
@@ -158,7 +130,7 @@ class MoaStage(StageBase):
         self.elapsed_time += time.clock() - self.start_time
         Clock.unschedule(self._do_stage_timeout)
         if recurse:
-            pause_list = self._pause_list
+            pause_list = self.pause_list
             for child in self.stages:
                 # only pause children not yet paused
                 if not child.paused:
@@ -180,13 +152,13 @@ class MoaStage(StageBase):
             Clock.schedule_once_priority(self._do_stage_timeout, max(0.,
             self.max_duration - self.elapsed_time))
         if recurse:
-            for child in self._pause_list:
+            for child in self.pause_list:
                 try:
                     if child.paused:
                         child.unpause(True)
                 except ReferenceError:
                     pass
-        self._pause_list = []
+        self.pause_list = []
         return True
 
     def stop(self, stage=True, **kwargs):
@@ -195,7 +167,8 @@ class MoaStage(StageBase):
 
         When this is called with super, this instance loop_done is set to True.
         '''
-        if not self.started or self.finished:
+        if not self.started or self.finished or stage and self.finishing or \
+                not stage and self.loop_done:
             self.log('debug', 'Stopping ignored. Source stage={}', stage)
             return False
         self.log('debug', 'Stopping. Source stage={}', stage)
@@ -216,7 +189,7 @@ class MoaStage(StageBase):
         if value:
             self.stop()
 
-    def clear(self, recurse=False, loop=False, **kwargs):
+    def clear(self, loop=False, **kwargs):
         '''Clears started etc. stops running if running.
         '''
         if not loop and self.started and not self.finished:
@@ -235,10 +208,13 @@ class MoaStage(StageBase):
             self.elapsed_time = 0.
             self.start_time = 0.
             self.finishing = False
-        if recurse:
-            for child in self.stages[:]:
-                child.clear(recurse)
         return True
+
+    def apply_restore_properties(self):
+        items = list(self.restored_properties.items())
+        self.restored_properties = {}
+        for k, v in items:
+            setattr(self, k, v)
 
     def skip_stage(self):
         ''' If True, when step_stage is called, it must continue the chain,
@@ -247,6 +223,116 @@ class MoaStage(StageBase):
         should return the same value.
         '''
         return self.disabled
+
+    def start_stage(self):
+        self.log('debug', 'Step stage, starting stage')
+        self.clear()
+        for child in self.stages[:]:
+            child.clear()
+
+        self.apply_restore_properties()
+        self.start_time = time.clock()
+        max_duration = self.max_duration
+        if not self.paused and max_duration > 0.:
+            Clock.schedule_once_priority(
+                self._do_stage_timeout, max_duration)
+        self.started = True
+        self.dispatch('on_stage_start')
+        return True
+
+    def start_trial(self, start_stage=False):
+        stages = self.stages[:]
+        if not start_stage:
+            for child in stages:
+                child.clear()
+            self.clear(loop=True)
+            t = time.clock()
+            self.elapsed_time += t - self.start_time
+            self.start_time = t
+            self.count += 1
+        self.dispatch('on_trial_start', self.count)
+
+        if self.order == 'serial':
+            for child in stages:
+                if not child.skip_stage():
+                    child.step_stage()
+                    break
+        else:
+            for child in stages:
+                child.step_stage()
+        return True
+
+    def advance_child_stage(self):
+        # loop not done, so decide if need to start next child, or wait
+        # for self/substage to complete.
+
+        # if parallel, all children should be started already
+        if self.order == 'parallel':
+            return False
+
+        i = None
+        log = self.log
+        stages = self.stages[:]
+        # when serial see if there's a next child to start
+        for k in range(len(stages)):
+            child = stages[k]
+            if not child.skip_stage() and not child.finished:
+                # if a child is already running we cannot proceed
+                if child.started:
+                    log('warning', 'Could not start next child ({})'
+                        '; this code should not have been reached', child)
+                    return False
+                else:
+                    i = k
+                    break
+
+        if i is not None:
+            for child in stages[i:]:
+                if not child.skip_stage():
+                    child.step_stage()
+                    return False
+                log('debug', 'skipping starting next serial child ({})',
+                    child)
+
+        if not self.loop_done:
+            return False
+
+        # if child becomes disabled between when we computed done and now
+        # then we may end up here and the loop may need to be ended.
+        log('warning', 'Could not start a child; this code should not '
+            'have been reached')
+        # if not loop_done:
+        return False
+
+    def check_loop_done(self):
+        '''if this loop should be terminated and increment count.
+        '''
+        loop_done = self.loop_done
+        comp_list = self.completion_list or self.stages
+        comp_type = self.completion_type
+        if self.finishing or self._loop_finishing:
+            return True
+
+        if not comp_list:
+            return loop_done
+
+        if comp_type == 'any':
+            if loop_done and self in comp_list:
+                return True
+            return any((c.finished and not c.skip_stage() for c in comp_list))
+
+        for c in comp_list:
+            if c == self:
+                if not loop_done:
+                    return False
+            else:
+                if not c.finished and not c.skip_stage():
+                    return False
+        return True
+
+    def ask_step_stage(self, source=None, **kwargs):
+        return Clock.schedule_once_priority(
+            partial(_ask_step_stage, self, source=source, **kwargs), -1)
 
     def step_stage(self, source=None, **kwargs):
         ''' Only allowed to be called when after on_stop, or if class finished
@@ -269,32 +355,27 @@ class MoaStage(StageBase):
         there is one entrance (here) and two exists (stop, and here). Exit code
         should be in both exists.
         '''
-
+        log = self.log
+        if self._within_step_stage:
+            log('error', 'step_stage for has been called recursively and may '
+                'result in incorrect behavior. Please use ask_step_stage '
+                'instead', stack_info=True)
         children = self.stages[:]
-        comp_list = self.completion_list
-        comp_type = self.completion_type
-        order = self.order
         if source is None:
             source = self
         # if we should start this stage
         start = (not self.started or self.finished) and source is self
-        log = self.log
 
         if start:
             if self.skip_stage():
                 log('debug', 'Step stage start skipped with skip_stage()')
                 return False
-            log('debug', 'Step stage, starting stage')
-            self.clear()
-            for child in children:
-                child.clear()
-
-            self.start_time = time.clock()
-            self.started = True
-            max_duration = self.max_duration
-            if not self.paused and max_duration > 0.:
-                Clock.schedule_once_priority(
-                    self._do_stage_timeout, max_duration)
+            self._within_step_stage = True
+            try:
+                if not self.start_stage():
+                    return False
+            finally:
+                self._within_step_stage = False
         elif not self.started and source is not self:
             log('warning', 'Step stage ignored because not started and source '
                 'is not self. source={}', source)
@@ -308,21 +389,17 @@ class MoaStage(StageBase):
 
         # decide if this loop iteration is done
         if source is self and not start:
+            self._within_step_stage = True
             self.loop_done = True
-        loop_done = self.loop_done
+            self._within_step_stage = False
         # if this loop should be terminated and increment count
-        done = self._loop_finishing = (
-            self.finishing or self._loop_finishing or (
-            comp_type == 'any' and (not comp_list or (loop_done and self in comp_list) or
-            any([c.finished and not c.skip_stage() for c in comp_list])))
-            or (comp_type == 'all' and
-            ((comp_list and all([(c.finished or c.skip_stage()) and
-                                 c != self
-            or c == self and loop_done for c in comp_list]))
-            or (not comp_list and (not children and loop_done or children and
-            all([c.finished or c.skip_stage() for c in children]))))))
+        old_done = self._loop_finishing
+        done = self._loop_finishing = self.check_loop_done()
+        if not old_done and done:
+            self._within_step_stage = True
+            self.dispatch('on_trial_end', self.count)
+            self._within_step_stage = False
 
-        i = None
         # if we need to finish loop, stop all the children and ourself
         # (just the loop, not stage)
         if done:
@@ -330,74 +407,31 @@ class MoaStage(StageBase):
                 if child.stop():
                     return False
             # in case child initiated completion, so we did not finish loop
-            if not loop_done:
+            if not self.loop_done:
                 self.stop(stage=False)
                 return False
         elif not start:
-            # loop not done, so decide if need to start next child, or wait
-            # for self/substage to complete.
-
             # if self is responsible and it's not done there's nothing to do
-            # or if parallel, all children should be started already
-            if source is self or order == 'parallel':
+            if source is self:
                 return False
-
-            # when serial see if there's a next child to start
-            for k in range(len(children)):
-                child = children[k]
-                if not child.skip_stage() and not child.finished:
-                    # if a child is already running we cannot proceed
-                    if child.started:
-                        log('warning', 'Could not start next child ({})'
-                            '; this code should not have been reached', child)
-                        return False
-                    else:
-                        i = k
-                        break
-
-            if i is not None:
-                for child in children[i:]:
-                    if not child.skip_stage():
-                        child.step_stage()
-                        return False
-                    log('debug', 'skipping starting next serial child ({})',
-                        child)
-
-            if not loop_done:
-                return False
-
-            # if child becomes disabled between when we computed done and now
-            # then we may end up here and the loop may need to be ended.
-            log('warning', 'Could not start a child; this code should not '
-                'have been reached')
-            # if not loop_done:
-            return False
+            return self.advance_child_stage()
 
         # if we reached here then either start or loop and children are done
         if not self.finishing and (start or self.repeat == -1 or
                                    self.count + 1 < self.repeat):
-            if not start:
-                for child in children:
-                    child.clear()
-                self.clear(loop=True)
-                t = time.clock()
-                self.elapsed_time += t - self.start_time
-                self.start_time = t
-                self.count += 1
-
-            if order == 'serial':
-                for child in children:
-                    if not child.skip_stage():
-                        child.step_stage()
-                        break
-            else:
-                for child in children:
-                    child.step_stage()
-            return True
+            self._within_step_stage = True
+            try:
+                return self.start_trial(start_stage=start)
+            finally:
+                self._within_step_stage = False
 
         if self.max_duration > 0.:
             Clock.unschedule(self._do_stage_timeout)
+        self.elapsed_time += time.clock() - self.start_time
+        self._within_step_stage = True
         self.finished = True
+        self.dispatch('on_stage_end')
+        self._within_step_stage = False
         parent = self.parent
         if parent is not None:
             parent.step_stage(source=self)
@@ -414,12 +448,31 @@ class MoaStage(StageBase):
             text = 'started'
         else:
             text = 'not started'
-        return '<{} name="{}": {}/{} parent="{}" {}>'.format(
-            self.__class__.__name__, self.name, self.count + 1, self.repeat,
-            'None' if self.parent is None else self.parent.name, text)
+        return '<{} knsname="{}": {}/{} parent="{}" {}>'.format(
+            self.__class__.__name__, self.knsname, self.count + 1, self.repeat,
+            'None' if self.parent is None else self.parent.knsname, text)
+
+    def on_stage_start(self, *largs):
+        pass
+
+    def on_trial_start(self, count):
+        pass
+
+    def on_trial_end(self, count):
+        pass
+
+    def on_stage_end(self):
+        pass
 
     stages = ListProperty([])
-    ''' read only
+    '''A list of children :class:`MoaStage` instance. When a stage is started,
+    it's children stages are also started with the exact details depending on
+    the :attr:`order`.
+
+    Similarly, a stage is considred finished when its children stages
+    are done and when its loops are done, depending on
+
+    It is read only. To modify, call :meth:`add_stage` or :meth:`remove_stage`.
     '''
 
     parent = ObjectProperty(None, allownone=True)
@@ -450,7 +503,9 @@ class MoaStage(StageBase):
     constructor.
     '''
 
-    exclude_attrs = ListProperty([])
+    restored_properties = DictProperty({})
+
+    restore_properties = ListProperty([])
 
     repeat = BoundedNumericProperty(1, min=-1)
     ''' 1 is once, -1 is indefinitely.

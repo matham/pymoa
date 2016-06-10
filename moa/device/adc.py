@@ -1,7 +1,8 @@
-'''ADC implementation of :class:`~moa.device.Device`.
-'''
+'''ADC Device
+===============
 
-__all__ = ('ADCPort', 'VirtualADCPort')
+ADC implementation of :class:`~moa.device.Device`.
+'''
 
 from kivy.properties import (
     DictProperty, BooleanProperty, NumericProperty, ObjectProperty,
@@ -9,6 +10,8 @@ from kivy.properties import (
 from moa.device import Device
 from time import clock
 from kivy.clock import Clock
+
+__all__ = ('ADCPort', 'VirtualADCPort')
 
 
 class ADCPort(Device):
@@ -29,7 +32,7 @@ class ADCPort(Device):
     The `on_data_update` event is fired after all the relevant channel data
     has been updated.
 
-    :attr:`timestamp` is a :kivy:class:`~kivy.properties.NumericProperty` and
+    :attr:`timestamp` is a :class:`~kivy.properties.NumericProperty` and
     defaults to 0.
 
     .. note::
@@ -51,7 +54,7 @@ class ADCPort(Device):
     The reverse conversion: :attr:`raw_data` = (:attr:`data` + :attr:`offset`
     ) * (2 ^ :attr:`bit_depth`) / :attr:`scale`.
 
-    :attr:`raw_data` is a :kivy:class:`~kivy.properties.ListProperty` and
+    :attr:`raw_data` is a :class:`~kivy.properties.ListProperty` and
     defaults to None.
     '''
 
@@ -65,7 +68,7 @@ class ADCPort(Device):
     contains the most recently read data for each channel. Channels that are
     not read at a particular update will be represented by a empty list type.
 
-    :attr:`data` is a :kivy:class:`~kivy.properties.ListProperty` and
+    :attr:`data` is a :class:`~kivy.properties.ListProperty` and
     defaults to None.
     '''
 
@@ -77,7 +80,7 @@ class ADCPort(Device):
     channel, so the index indicates the corresponding data point read at the
     time of :attr:`timestamp`.
 
-    :attr:`ts_idx` is a :kivy:class:`~kivy.properties.ListProperty` and
+    :attr:`ts_idx` is a :class:`~kivy.properties.ListProperty` and
     defaults to None.
     '''
 
@@ -86,14 +89,14 @@ class ADCPort(Device):
     each corresponding channel is active. Inactive channels are ones that don't
     get data.
 
-    :attr:`active_channels` is a :kivy:class:`~kivy.properties.ListProperty`
+    :attr:`active_channels` is a :class:`~kivy.properties.ListProperty`
     and defaults to None.
     '''
 
     num_channels = NumericProperty(1)
     '''The number of channels in the ADC.
 
-    :attr:`num_channels` is a :kivy:class:`~kivy.properties.NumericProperty`
+    :attr:`num_channels` is a :class:`~kivy.properties.NumericProperty`
     and defaults to 1.
     '''
 
@@ -101,28 +104,28 @@ class ADCPort(Device):
     '''The number of bits of :attr:`raw_data` data points. If zero, only
     :attr:`data` is populated.
 
-    :attr:`bit_depth` is a :kivy:class:`~kivy.properties.NumericProperty`
+    :attr:`bit_depth` is a :class:`~kivy.properties.NumericProperty`
     and defaults to 0.
     '''
 
     scale = NumericProperty(1.)
     '''The scale when converting :attr:`raw_data` to :attr:`data`.
 
-    :attr:`scale` is a :kivy:class:`~kivy.properties.NumericProperty`
+    :attr:`scale` is a :class:`~kivy.properties.NumericProperty`
     and defaults to 1.0.
     '''
 
     offset = NumericProperty(0)
     '''The offset when converting :attr:`raw_data` to :attr:`data`.
 
-    :attr:`offset` is a :kivy:class:`~kivy.properties.NumericProperty`
+    :attr:`offset` is a :class:`~kivy.properties.NumericProperty`
     and defaults to 0.0.
     '''
 
     frequency = NumericProperty(0)
     '''The frequency at which each ADC channel is sampled.
 
-    :attr:`frequency` is a :kivy:class:`~kivy.properties.NumericProperty`
+    :attr:`frequency` is a :class:`~kivy.properties.NumericProperty`
     and defaults to 0.0.
     '''
 
@@ -182,7 +185,7 @@ data_size=2, frequency=4, bit_depth=16)
         The data returned is for :attr:`ADCPort.data`, :attr:`ADCPort.raw_data`
         values are computed from it.
 
-    :attr:`data_func` is a :kivy:class:`~kivy.properties.ObjectProperty` and
+    :attr:`data_func` is a :class:`~kivy.properties.ObjectProperty` and
     defaults to None.
     '''
 
@@ -196,7 +199,7 @@ data_size=2, frequency=4, bit_depth=16)
         The data is generated in approximate real time according to
         :attr:`data_size` and :attr:`ADCPort.frequency`.
 
-    :attr:`data_size` is a :kivy:class:`~kivy.properties.NumericProperty` and
+    :attr:`data_size` is a :class:`~kivy.properties.NumericProperty` and
     defaults to 0.
     '''
 

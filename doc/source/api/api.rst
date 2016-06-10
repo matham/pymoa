@@ -5,7 +5,7 @@
 ####################
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
    moa.rst
    app.rst
@@ -13,7 +13,6 @@
    clock.rst
    compat.rst
    config.rst
-   data_logger.rst
    logger.rst
    threads.rst
    utils.rst

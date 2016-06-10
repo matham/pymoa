@@ -1,12 +1,15 @@
-'''Some implementations of :class:`~moa.device.Device`. See classes
-'''
+'''Channel Devices
+====================
 
-__all__ = ('ChannelBase', 'Channel', 'Port', )
+Some simple implementations of :class:`~moa.device.Device`. See classes
+'''
 
 from kivy.properties import (
         DictProperty, OptionProperty, NumericProperty, ObjectProperty,
         BooleanProperty)
 from moa.device import Device
+
+__all__ = ('ChannelBase', 'Channel', 'Port', )
 
 
 class ChannelBase(Device):
@@ -16,7 +19,7 @@ class ChannelBase(Device):
     Following is the typical expected structure of these devices. Each channel
     represents some kind of interaction with the world. E.g. it might represent
     digital input lines and output switches, multi-channel ADCs, or analog
-    output channels. It might event represent graphical the state of buttons.
+    output channels. It might event represent the graphical state of buttons.
 
     For each of these channels in the device, the instance should contain a
     property representing the channel state. For example, a single digital
@@ -28,13 +31,13 @@ class ChannelBase(Device):
     :attr:`~moa.device.digital.DigitalChannel.state` to cause a change in the
     state, rather one calls :meth:`set_state`. Once :meth:`set_state` changes
     the state, it is its responsibility to update the `state` variable and
-    e.g. :attr:`timestamp`.
+    e.g. :attr:`timestamp` and then emit a `on_data_update` event.
 
     Consequently, the pattern is for the device to update the state variables
     with every change to the device. From the outside, one calls
     :meth:`set_state` to change the state and then reads (or listens to) the
-    property to get the current state, including after a call to
-    :meth:`set_state`.
+    property or `on_data_update` to get the current state, including after a
+    call to :meth:`set_state`.
 
     See :mod:`~moa.device.analog` and :mod:`~moa.device.digital` for example
     devices.
@@ -44,7 +47,7 @@ class ChannelBase(Device):
     '''The direction of the port channels of this device. A device can have
     either input or output channels, or both.
 
-    :attr:`direction` is a :kivy:class:`~kivy.properties.OptionProperty` and
+    :attr:`direction` is a :class:`~kivy.properties.OptionProperty` and
     defaults to `'io'`. It accepts `'i'`, `'o'`, `'io'`, or `'oi'`.
     '''
 
@@ -56,7 +59,7 @@ class ChannelBase(Device):
     that when responding to a attribute change, :attr:`timestamp` is accurate.
     The `on_data_update` event is fired after the complete data update.
 
-    :attr:`timestamp` is a :kivy:class:`~kivy.properties.NumericProperty` and
+    :attr:`timestamp` is a :class:`~kivy.properties.NumericProperty` and
     defaults to 0.
 
     .. note::
@@ -71,16 +74,17 @@ class ChannelBase(Device):
     '''Whether the state should be reset to `None` when it is activated.
 
     Whenever :meth:`activate` is called, if the base class returns True and
-    :attr:`reset_state` is True, the state variable will be set to None. It's
-    to indicate that the state is unknown until the first time it's updated.
+    :attr:`reset_state` is True, the state variable (or whatever its name) will
+    be set to None. It's to indicate that the state is unknown until the first
+    time it's updated.
 
-    :attr:`reset_state` is a :kivy:class:`~kivy.properties.BooleanProperty` and
+    :attr:`reset_state` is a :class:`~kivy.properties.BooleanProperty` and
     defaults to True.
     '''
 
     def set_state(self, **kwargs):
-        '''A abstract method for setting the state. See :class:`ChannelBase` for
-        details.
+        '''A abstract method for setting the state. See :class:`ChannelBase`
+        for details.
 
         .. note::
             If supported, the method needs to be overwritten by a base class
@@ -127,9 +131,9 @@ class Channel(ChannelBase):
     state = ObjectProperty(None, allownone=True)
     '''Represents the state of the channel.
 
-    It is a :kivy:class:`~kivy.properties.ObjectProperty` and defaults to
+    It is a :class:`~kivy.properties.ObjectProperty` and defaults to
     None. This variable is meant to be overwritten by device specific classes,
-    e.g. a :kivy:class:`~kivy.properties.BooleanProperty` for a digital
+    e.g. a :class:`~kivy.properties.BooleanProperty` for a digital
     channel.
 
     .. warning::
@@ -138,11 +142,6 @@ class Channel(ChannelBase):
     '''
 
     def activate(self, *largs, **kwargs):
-        '''See :meth:`~moa.device.Device.activate`.
-
-        If :attr:`ChannelBase.reset_state`, when activating :attr:`state` will
-        be set to None.
-        '''
         if not self.reset_state:
             return super(Channel, self).activate(*largs, **kwargs)
         if super(Channel, self).activate(*largs, **kwargs):
@@ -177,16 +176,13 @@ class Port(ChannelBase):
         ...     photobeam = BooleanProperty(False, allownone=True)
         ...     light = BooleanProperty(False, allownone=True)
         ...
-        ...     def __init__(self, **kwargs):
-        ...         super(DigitalPort, self).__init__(**kwargs)
-        ...         self.attr_map = {'photobeam': 2, 'light': 5}
-        ...
         ...     def set_state(self, name, value):
         ...         print('Setting line {} to {}'.format(self.attr_map[name],\
  value))
         ...         setattr(self, name, value)
-
-        >>> port = DigitalPort()
+        ...
+        >>> # photobeam controls physical line 2 and the light line 5
+        >>> port = DigitalPort(attr_map={'photobeam': 2, 'light': 5})
         >>> print(port.photobeam)
         False
         >>> port.chan_attr_map
@@ -211,12 +207,12 @@ class Port(ChannelBase):
     '''As described in :class:`Port`, each channel in the port has an
     associated property. :attr:`attr_map` maps each property to the channel it
     controls. For example, it could be the channel number in a 8-channel port,
-    or a button instance.
+    or a button instance. It's is up to the implementor to decide its meaning.
 
     In the dict, keys are the property names and values are the things they map
     to.
 
-    :attr:`attr_map` is a :kivy:class:`~kivy.properties.DictProperty` and
+    :attr:`attr_map` is a :class:`~kivy.properties.DictProperty` and
     defaults to the empty dictionary.
     '''
 
@@ -224,7 +220,7 @@ class Port(ChannelBase):
     '''The inverted mapping of :attr:`attr_map` and maps channels to channel
     names.
 
-    :attr:`chan_attr_map` is a :kivy:class:`~kivy.properties.DictProperty` and
+    :attr:`chan_attr_map` is a :class:`~kivy.properties.DictProperty` and
     defaults to the empty dictionary.
 
     .. note::

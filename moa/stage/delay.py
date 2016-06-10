@@ -1,20 +1,22 @@
-
-
-__all__ = ('Delay', )
+'''Delay Stage
+===============
+'''
 
 import random
-import time
 
-from kivy.properties import (OptionProperty, BoundedNumericProperty,
-    ReferenceListProperty)
+from kivy.properties import (
+    OptionProperty, BoundedNumericProperty, ReferenceListProperty)
 
 from moa.stage import MoaStage
 from moa.clock import Clock
 
+__all__ = ('Delay', )
+
 
 class Delay(MoaStage):
-
-    __recovery_attrs__ = ('delay', )
+    '''A stage that delays for :attr:`delay` seconds before the stage
+    is automatically completed.
+    '''
 
     _delay_step_trigger = None
 
@@ -59,7 +61,22 @@ class Delay(MoaStage):
     max = BoundedNumericProperty(1., min=0.)
 
     range = ReferenceListProperty(min, max)
+    '''A 2-tuple of the minimum and maximum value used to generate
+    :attr:`delay` when :attr:`delay_type` is `random`. The :attr:`delay`
+    '''
 
     delay = BoundedNumericProperty(0.5, min=0.)
+    '''How long the stage should delay for each trial. See :attr:`delay_type`.
+    '''
 
     delay_type = OptionProperty('constant', options=['constant', 'random'])
+    '''Whether the :attr:`delay` is a constant value provided by the user or if
+    :attr:`delay` should be generated randomly for each trial from a linear
+    :attr:`range`.
+
+    If random, :attr:`delay` will automatically be updated with a new value
+    before each trial.
+
+    Possible values are ``'constant'`` and ``'random'``. Defaults to
+    ``'constant'``.
+    '''

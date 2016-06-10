@@ -1,10 +1,14 @@
-'''The Moa logger module provides a logger class that is forwarded to kivy.
-It creates a base logger with name `moa` from which all moa logger are derived.
+'''Logger
+==========
+
+The Moa logger module provides a logger class that forwards logs to kivy.
+It creates a base logger with name `moa` from which all moa loggers are
+derived.
 
 .. note::
-    Logs that pass the filter and are emitted by the moa logger, are forwarded
-    to the kivy logger and emitted based on kivy's log level. Therefore, both
-    the moa and kivy logger must be configured to the correct level for
+    Logs that match Moa's log level are still forwarded to the kivy logger and
+    emitted only if they also pass kivy's log level. Therefore, both
+    the Moa and Kivy logger must be configured to the correct level for
     emission.
 
 For example::
@@ -25,17 +29,19 @@ For example::
 10 debug hello
 '''
 
-__all__ = ('Logger', 'MoaObjectLogger')
-
 import logging
 from functools import partial
 import sys
 import os
+import traceback
 
 from kivy.logger import Logger as KivyLogger
 from kivy.logger import LOG_LEVELS
+from kivy.compat import PY2
 from kivy.properties import (
     ObjectProperty, ListProperty, OptionProperty, StringProperty)
+
+__all__ = ('Logger', 'MoaObjectLogger')
 
 
 def logger_config_update(section, key, value):
@@ -48,13 +54,14 @@ def logger_config_update(section, key, value):
 
 
 # next bit filched from logging.py
-if hasattr(sys, 'frozen'): #support for py2exe
+if hasattr(sys, 'frozen'):  # support for py2exe
     _srcfile = "logging%s__init__%s" % (os.sep, __file__[-4:])
 elif __file__[-4:].lower() in ['.pyc', '.pyo']:
     _srcfile = __file__[:-4] + '.py'
 else:
     _srcfile = __file__
 _srcfile = os.path.normcase(_srcfile)
+
 
 def currentframe():
     """Return the frame object for the caller's stack frame."""
@@ -63,7 +70,9 @@ def currentframe():
     except:
         return sys.exc_info()[2].tb_frame.f_back
 
-if hasattr(sys, '_getframe'): currentframe = lambda: sys._getframe(3)
+if hasattr(sys, '_getframe'):
+    def currentframe():
+        return sys._getframe(3)
 # done filching
 
 
@@ -95,7 +104,7 @@ logging.setLoggerClass(_MoaLoggerBase)
 Logger = logging.getLogger('moa')
 '''The `moa` logger instance.
 '''
-#logging.setLoggerClass(_orig_cls)
+# logging.setLoggerClass(_orig_cls)
 Logger.trace = partial(Logger.log, logging.TRACE)
 _kivyhandler = KivyHandler()
 _kivyhandler.setFormatter(logging.Formatter(
@@ -105,12 +114,12 @@ Logger.addHandler(_kivyhandler)
 
 class MoaObjectLogger(object):
     '''This is a base class, which when combined with a
-    :kivy:class:`~kivy.event.EventDispatcher` derived class will allow
+    :class:`~kivy.event.EventDispatcher` derived class will allow
     automatic logging of the properties and events.
 
     .. warning::
-        This calls must be combined with a
-        :kivy:class:`~kivy.event.EventDispatcher` type class, otherwise it will
+        This class must be combined with a
+        :class:`~kivy.event.EventDispatcher` type class, otherwise it will
         raise exceptions.
 
     For example::
@@ -127,7 +136,7 @@ class MoaObjectLogger(object):
         >>> class LoggedWidget(MoaObjectLogger, Widget):
         ...     pass
 
-        >>> wid = LoggedWidget(logged_attrs=['height', 'logged_attrs', \
+        >>> wid = LoggedWidget(logged_props=['height', 'logged_props', \
 'logged_pat'])
         >>> wid.height = 10
         [DEBUG             ] [Moa         ] 2015-01-30 13:06:49,184 G:\Pyth\
@@ -139,7 +148,7 @@ G:\Python\libs\Playground\src\playground8.py:<module>:11 [widget wid] \
 logged_pat=[widget wid] {msg}
         >>> wid.width = 10
         >>> # notice no output
-        >>> wid.logged_attrs = ['width']
+        >>> wid.logged_props = ['width']
         >>> # notice no output here because the logged_* variables are changed\
  before the log output
         >>> wid.width = 50
@@ -148,7 +157,6 @@ G:\Python\libs\Playground\src\playground8.py:<module>:15 [widget wid] width=50
         >>> wid.log('debug', 'hello {}', 'You')
         [DEBUG             ] [Moa         ] 2015-01-30 13:06:49,184 \
 G:\Python\libs\Playground\src\playground8.py:<module>:16 [widget wid] hello You
-
     '''
 
     def __init__(self, **kwargs):
@@ -156,9 +164,9 @@ G:\Python\libs\Playground\src\playground8.py:<module>:16 [widget wid] hello You
             self.logger = logging.getLogger(self.__module__)
         super(MoaObjectLogger, self).__init__(**kwargs)
         if self.logger is not None:
-            self.fbind('logged_attrs', self._update_bound_loggers, 'bind')
+            self.fbind('logged_props', self._update_bound_loggers, 'bind')
             self.fbind(
-                'log_attrs_type', self._update_bound_loggers, 'bind')
+                'logged_props_type', self._update_bound_loggers, 'bind')
             self._update_bound_loggers()
 
     def _update_bound_loggers(self, action='bind', *largs):
@@ -172,8 +180,8 @@ G:\Python\libs\Playground\src\playground8.py:<module>:16 [widget wid] hello You
 
         fbind = self.fbind
         events, props = self.events(), self.properties()
-        attrs = self.logged_attrs
-        select = self.log_attrs_type
+        attrs = self.logged_props
+        select = self.logged_props_type
         if select == 'include':
             events = [e for e in attrs if e in events]
             props = [p for p in attrs if p in props]
@@ -188,7 +196,8 @@ G:\Python\libs\Playground\src\playground8.py:<module>:16 [widget wid] hello You
             fbind(prop, self.log_property_dispatch, prop)
 
     def log_property_dispatch(self, name, instance, value):
-        '''The callback that is executed when a property is changed.
+        '''The callback that is automatically executed when a property that is
+        tracked because of :attr:`logged_props` is changed.
 
         :Parameters:
 
@@ -201,10 +210,13 @@ G:\Python\libs\Playground\src\playground8.py:<module>:16 [widget wid] hello You
         '''
         logger = self.logger
         if logger is not None:
-            logger.debug(self.logged_pat.format(msg='{}={}'.format(name, value), self=self))
+            logger.debug(
+                self.logged_pat.format(msg='{}={}'.format(name, value),
+                                       self=self))
 
     def log_event_dispatch(self, name, instance):
-        '''The callback that is executed when a event is triggered.
+        '''The callback that is automatically executed when a event that is
+        tracked because of :attr:`logged_props` is triggered.
 
         :Parameters:
 
@@ -215,38 +227,65 @@ G:\Python\libs\Playground\src\playground8.py:<module>:16 [widget wid] hello You
         '''
         logger = self.logger
         if logger is not None:
-            logger.debug(self.logged_pat.format(msg='{}'.format(name), self=self))
+            logger.debug(
+                self.logged_pat.format(msg='{}'.format(name), self=self))
 
     def log(self, level, msg, *largs, **kwargs):
         '''A convenience method that formats the message according to
         :attr:`logged_pat` and forwards it to :attr:`logger` if not None.
+
         It functions similar to the Logger's `log` method (largs and kwargs
         are ). See :class:`MoaObjectLogger` for an example.
+
+        Before passing on, the log is formatted as follows::
+
+            self.logged_pat.format(msg=msg.format(*largs, **kwargs), self=self)
+
+        However, the keywords ``'exc_info'``, ``'extra'``, and ``'stack_info'``
+        are removed from ``kwargs``, if present, and passed on to the logger's
+        log method. Specifically, ``stack_info``, if True, will emit a full
+        stack trace in py2 and 3.
+
+        :Parameters:
+
+            `level`: str
+                The level of the log
+            `msg`: str
+                The log's message.
         '''
         logger = self.logger
         if logger is None:
             return
-        getattr(logger, level)(self.logged_pat.format(
-            msg=msg.format(*largs, **kwargs), self=self))
+        logger = getattr(logger, level)
 
-    log_attrs_type = OptionProperty('include', options=['exclude', 'include'])
-    '''Whether the :attr:`logged_attrs` list indicates the properties and to
+        log_kwargs = {k: kwargs.pop(k)
+                      for k in ('exc_info', 'extra', 'stack_info')
+                      if k in kwargs}
+        msg = self.logged_pat.format(
+            msg=msg.format(*largs, **kwargs), self=self)
+
+        if PY2 and log_kwargs.pop('stack_info', False):
+            msg += '\n' + ''.join(traceback.format_stack()[:-1])
+        logger(msg, **log_kwargs)
+
+    logged_props_type = OptionProperty('include', options=['exclude', 'include'])
+    '''Whether the :attr:`logged_props` list indicates the properties to
     include or exclude from being logged.
 
-    :attr:`log_attrs_type` is a :kivy:class:`~kivy.properties.OptionProperty`
+    :attr:`logged_props_type` is a :class:`~kivy.properties.OptionProperty`
     and defaults to `'include'` (i.e. nothing is logged). Allowed value are
     `'exclude'` and `'include'`. See :class:`MoaObjectLogger` for details.
     '''
 
-    logged_attrs = ListProperty([])
+    logged_props = ListProperty([])
     '''A list of event and property names used to decide which events and
     properties are logged.
 
-    If :attr:`log_attrs_type` is `include`, then only properties or events in
+    If :attr:`logged_props_type` is `include`, then only properties or events in
     this list will be logged. If it's `exclude`, all properties and events,
     except those in the list, will be logged.
 
-    :attr:`logged_attrs` is a :kivy:class:`~kivy.properties.ListProperty` and
+    :attr:`logged_props` is a :class:`~kivy.properties.ListProperty` and
     defaults to `[]`. See :class:`MoaObjectLogger` for an example.
     '''
 
@@ -256,7 +295,7 @@ G:\Python\libs\Playground\src\playground8.py:<module>:16 [widget wid] hello You
     message contents while self is this object whose :attr:`logger` we're
     logging to.
 
-    :attr:`logged_pat` is a :kivy:class:`~kivy.properties.StringProperty` and
+    :attr:`logged_pat` is a :class:`~kivy.properties.StringProperty` and
     defaults to `'{self} : {msg}'`. See :class:`MoaObjectLogger` for an
     example.
     '''
@@ -264,7 +303,8 @@ G:\Python\libs\Playground\src\playground8.py:<module>:16 [widget wid] hello You
     logger = ObjectProperty(None, allownone=True)
     '''The logger object to which things are logged.
 
-    :attr:`logger` is a :kivy:class:`~kivy.properties.ObjectProperty` and
-    defaults to a Logger object with name `__name__`
-    (effectively `moa.logger`). If None, no logging will occur.
+    :attr:`logger` is a :class:`~kivy.properties.ObjectProperty` and
+    defaults to a Logger object with name ``__module__``, where ``__module__``
+    refers to the module name of the derived class. If None, no logging will
+    occur.
     '''
