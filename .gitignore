@@ -1,2 +1,7 @@
 *.pyc
+*egg-info
+doc/build
+.settings
+.project
+.pydevproject
 moa/tests/temp/*
