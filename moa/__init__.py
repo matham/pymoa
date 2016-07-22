@@ -19,7 +19,7 @@ from kivy import kivy_home_dir
 
 from moa.logger import Logger
 
-__version__ = '0.1'
+__version__ = '0.2-dev'
 
 
 #: moa configuration filename
