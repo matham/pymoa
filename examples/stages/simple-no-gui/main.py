@@ -6,7 +6,7 @@ environ['MOA_CLOCK'] = '1'
 from moa.stage import MoaStage
 from kivy.lang import Builder
 from moa.app import MoaApp
-from moa.clock import Clock
+from kivy.clock import Clock
 from kivy.app import runTouchApp
 
 Builder.load_file(join(dirname(__file__), 'experiment.kv'))

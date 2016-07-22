@@ -2,23 +2,20 @@
 =======
 A framework for designing and running experiments in Python using Kivy.
 
-:Environment:
+.. note::
 
-    `MOA_CLOCK`:
-        When `'1'`, the :func:`~moa.clock.set_clock` will be called and
-        set to the :class:`~moa.clock.MoaClockBase` before anything else is
-        imported.
+    :mod:`moa` needs to be imported before anything clock related in kivy
+    is imported.
+
 '''
 
-from kivy import kivy_home_dir
 from os import environ
 from os.path import join
 
-if environ.get('MOA_CLOCK', '0') in ('1', 'True'):
-    from moa.clock import set_clock
-    set_clock(clock='moa')
-else:
-    import moa.clock
+if 'KIVY_CLOCK' not in environ:
+    environ['KIVY_CLOCK'] = 'free_only'
+
+from kivy import kivy_home_dir
 
 from moa.logger import Logger
 

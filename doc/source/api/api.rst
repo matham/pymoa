@@ -10,7 +10,6 @@
    moa.rst
    app.rst
    base.rst
-   clock.rst
    compat.rst
    config.rst
    logger.rst

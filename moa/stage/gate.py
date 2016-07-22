@@ -6,7 +6,7 @@ from kivy.properties import (
     NumericProperty, ReferenceListProperty)
 
 from moa.stage import MoaStage
-from moa.clock import Clock
+from kivy.clock import Clock
 
 __all__ = ('GateStage', 'DigitalGateStage', 'AnalogGateStage')
 
@@ -25,9 +25,9 @@ class GateStage(MoaStage):
     def __init__(self, **kwargs):
         super(GateStage, self).__init__(**kwargs)
         self._port_callback_trigger = \
-            Clock.create_trigger_priority(self._port_callback)
+            Clock.create_trigger_free(self._port_callback)
         self._hold_timeout_trigger = \
-            Clock.create_trigger_priority(self._hold_timeout)
+            Clock.create_trigger_free(self._hold_timeout)
 
     def _hold_timeout(self, *largs):
         t = self.hold_time

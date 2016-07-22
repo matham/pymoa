@@ -19,7 +19,7 @@ from kivy.uix.widget import Widget
 from kivy.factory import Factory
 
 from moa.base import MoaBase
-from moa.clock import Clock
+from kivy.clock import Clock
 import moa.stage
 
 __all__ = ('MoaStage', )
@@ -149,7 +149,7 @@ class MoaStage(StageBase):
 
         self.start_time = time.clock()
         if self.max_duration > 0.:
-            Clock.schedule_once_priority(self._do_stage_timeout, max(0.,
+            Clock.schedule_once_free(self._do_stage_timeout, max(0.,
             self.max_duration - self.elapsed_time))
         if recurse:
             for child in self.pause_list:
@@ -234,7 +234,7 @@ class MoaStage(StageBase):
         self.start_time = time.clock()
         max_duration = self.max_duration
         if not self.paused and max_duration > 0.:
-            Clock.schedule_once_priority(
+            Clock.schedule_once_free(
                 self._do_stage_timeout, max_duration)
         self.started = True
         self.dispatch('on_stage_start')
@@ -331,7 +331,7 @@ class MoaStage(StageBase):
         return True
 
     def ask_step_stage(self, source=None, **kwargs):
-        return Clock.schedule_once_priority(
+        return Clock.schedule_once_free(
             partial(_ask_step_stage, self, source=source, **kwargs), -1)
 
     def step_stage(self, source=None, **kwargs):

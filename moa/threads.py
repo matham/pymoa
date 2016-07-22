@@ -8,7 +8,7 @@ from collections import defaultdict
 from threading import RLock, Event, Thread
 import sys
 
-from moa.clock import Clock
+from kivy.clock import Clock
 
 __all__ = ('ScheduledEvent', 'ScheduledEventLoop')
 
@@ -179,7 +179,7 @@ kwargs "{'apple': 'gala', 'spice': 'cinnamon'}"
         self.__callback_lock = RLock()
         self.__thread_event = Event()
         self.__callbacks = defaultdict(list)
-        self._kivy_trigger = Clock.create_trigger_priority(
+        self._kivy_trigger = Clock.create_trigger_free(
             self._service_main_thread)
         self.start_thread()
 
