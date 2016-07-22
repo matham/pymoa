@@ -43,6 +43,15 @@ build_script:
 
     Check-Error
 
+    mkdir deploy
+
+    Check-Error
+
+    if ($env:BITTNESS -eq "64" -and $env:PYVER -eq "34") {
+      python setup.py sdist -d "deploy"
+      Check-Error
+    }
+
 test_script:
 - ps: >-
     iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/matham/packaging/master/check_error.ps1'))
@@ -51,6 +60,9 @@ test_script:
 
     Check-Error
 
+artifacts:
+- path: deploy\*
+  name: wheels
 on_success:
 - ps: >-
     if ($env:BITTNESS -eq "64" -and $env:PYVER -eq "27") {
