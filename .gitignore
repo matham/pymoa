@@ -4,4 +4,4 @@ doc/build
 .settings
 .project
 .pydevproject
-moa/tests/temp/*
+pymoa/tests/temp/*

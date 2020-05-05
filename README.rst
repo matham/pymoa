@@ -1,17 +1,21 @@
-Moa is a kivy based framework for describing and running experiments.
+Moa is a framework for describing and running experiments.
 
-For more information: http://matham.github.io/moa/index.html
+For more information: http://matham.github.io/pymoa/index.html
 
-To install https://matham.github.io/moa/installation.html
+To install https://matham.github.io/pymoa/installation.html
 
-.. image:: https://ci.appveyor.com/api/projects/status/j9s0v9etdjg0h8vv/branch/master?svg=true
-    :target: https://ci.appveyor.com/project/matham/moa/branch/master
-    :alt: Appveyor status
-
-.. image:: https://img.shields.io/pypi/pyversions/moa.svg
+.. image:: https://img.shields.io/pypi/pyversions/pymoa.svg
     :target: https://pypi.python.org/pypi/moa/
     :alt: Supported Python versions
 
-.. image:: https://img.shields.io/pypi/v/moa.svg
+.. image:: https://img.shields.io/pypi/v/pymoa.svg
     :target: https://pypi.python.org/pypi/moa/
     :alt: Latest Version on PyPI
+
+.. image:: https://coveralls.io/repos/github/matham/pymoa/badge.svg?branch=master
+    :target: https://coveralls.io/github/matham/pymoa?branch=master
+    :alt: Coverage status
+
+.. image:: https://github.com/matham/pymoa/workflows/.github/workflows/pythonapp.yml/badge.svg
+    :target: https://github.com/matham/pymoa/actions
+    :alt: Github action status

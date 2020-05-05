@@ -1,28 +1,48 @@
 from setuptools import setup, find_packages
-import moa
+from io import open
+from os import path
 
-with open('README.rst') as fh:
-    long_description = fh.read()
+from pymoa import __version__
+
+here = path.abspath(path.dirname(__file__))
+
+with open(path.join(here, 'README.rst'), encoding='utf-8') as f:
+    long_description = f.read()
+
+URL = 'https://github.com/matham/pymoa'
 
 setup(
-    name='PyMoa',
-    version=moa.__version__,
+    name='pymoa',
+    version=__version__,
     author='Matthew Einhorn',
     author_email='moiein2000@gmail.com',
     license='MIT',
-    description='Kivy based scientific platform for running experiments.',
-    url='http://matham.github.io/moa/',
+    description='Scientific platform for running experiments.',
     long_description=long_description,
-    classifiers=['License :: OSI Approved :: MIT License',
-                 'Topic :: Scientific/Engineering',
-                 'Topic :: System :: Hardware',
-                 'Programming Language :: Python :: 2.7',
-                 'Programming Language :: Python :: 3.3',
-                 'Programming Language :: Python :: 3.4',
-                 'Programming Language :: Python :: 3.5',
-                 'Operating System :: Microsoft :: Windows',
-                 'Intended Audience :: Developers'],
+    url=URL,
+    classifiers=[
+        'Development Status :: 4 - Beta',
+        'Intended Audience :: Developers',
+        'Topic :: Software Development :: Libraries',
+        'License :: OSI Approved :: MIT License',
+        'Topic :: Scientific/Engineering',
+        'Topic :: System :: Hardware',
+        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
+    ],
     packages=find_packages(),
-    package_data={'moa': ['data/*.kv']},
-    install_requires=['kivy']
-    )
+    install_requires=['kivy', 'trio', 'outcome'],
+    extras_require={
+        'dev': [
+            'pytest>=3.6', 'pytest-cov', 'flake8', 'sphinx-rtd-theme',
+            'coveralls', 'pytest-trio', 'sphinxcontrib-trio'],
+        'network': ['quart', 'quart-trio', 'asks'],
+    },
+    package_data={
+        'pymoa':
+            []},
+    project_urls={
+        'Bug Reports': URL + '/issues',
+        'Source': URL,
+    },
+)
