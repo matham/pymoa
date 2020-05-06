@@ -44,7 +44,7 @@ class ThreadExecutor(Executor):
         # this case shouldn't block process exit.
         self.limiter = trio.CapacityLimiter(1)
         thread = self._thread = threading.Thread(
-            target=self._worker_thread_fn,  name=self.name,  daemon=True,
+            target=self._worker_thread_fn, name=self.name, daemon=True,
             args=(queue, ))
         thread.start()
 
@@ -142,7 +142,7 @@ class AsyncThreadExecutor(Executor):
         self.limiter = trio.CapacityLimiter(1)
 
         thread = self._thread = threading.Thread(
-            target=self._worker_thread_fn,  name=self.name,  daemon=True,
+            target=self._worker_thread_fn, name=self.name, daemon=True,
             args=(event, from_thread_portal))
         thread.start()
         # wait until class variables are set

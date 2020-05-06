@@ -167,5 +167,5 @@ class Port(ChannelBase):
     _config_props_ = ('channel_names', )
 
     channel_names: List[str] = []
-    '''List of name of the channels of the port. 
+    '''List of name of the channels of the port.
     '''

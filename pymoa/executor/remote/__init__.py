@@ -2,7 +2,7 @@
 =========
 
 """
-from typing import Dict, List, Any, Callable, Iterable, Tuple, Set, AsyncGenerator
+from typing import Dict, List, Any, Callable, Tuple, Set, AsyncGenerator
 import json
 import base64
 import hashlib
@@ -197,7 +197,7 @@ class RemoteExecutorServer(RemoteExecutorServerBase):
 
     stream_data_logger: 'RemoteDataLogger' = None
 
-    def __init__(self, registry: 'RemoteRegistry' = None,  **kwargs):
+    def __init__(self, registry: 'RemoteRegistry' = None, **kwargs):
         super(RemoteExecutorServer, self).__init__(**kwargs)
         if registry is None:
             registry = RemoteRegistry()
@@ -376,7 +376,7 @@ class InstanceRegistry:
             if isinstance(obj, cls):
                 return {name: encoder(obj)}
 
-        raise TypeError(f'Object of type {obj.__class__.__name__} ' 
+        raise TypeError(f'Object of type {obj.__class__.__name__} '
                         f'is not JSON serializable')
 
     def encode_json(self, obj):
