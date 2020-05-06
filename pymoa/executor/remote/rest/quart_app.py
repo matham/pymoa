@@ -1,3 +1,7 @@
+"""Quart App
+============
+
+"""
 # todo: investigate compression and no-cache for data
 from http import HTTPStatus
 from quart_trio import QuartTrio

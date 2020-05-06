@@ -1,3 +1,7 @@
+"""Executor
+===========
+
+"""
 from functools import wraps, partial
 from asyncio import iscoroutinefunction
 from typing import Tuple

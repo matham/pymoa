@@ -1,4 +1,4 @@
-"""Stages
+"""Stage
 ==========
 
 A stage is fundamental to an experiment. A stage typically describes an epoch
@@ -16,13 +16,12 @@ from kivy.properties import (
     BooleanProperty, NumericProperty, OptionProperty, BoundedNumericProperty,
     ObjectProperty, ListProperty)
 
-from pymoa.base import MoaBase
 from pymoa.data_logger import Loggable
 
 __all__ = ('MoaStage', )
 
 
-class MoaStage(MoaBase, Loggable):
+class MoaStage(Loggable):
 
     __events__ = (
         'on_stage_start', 'on_trial_start', 'on_trial_end', 'on_stage_end')

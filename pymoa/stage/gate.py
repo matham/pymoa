@@ -1,4 +1,7 @@
+"""Device gated stage
+=====================
 
+"""
 from typing import Tuple
 from time import perf_counter
 import trio

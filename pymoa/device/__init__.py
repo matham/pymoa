@@ -1,5 +1,5 @@
-"""Devices
-============
+"""Device
+=========
 
 Device module for interfacing Moa with devices (e.g switches, ADC, etc.).
 """

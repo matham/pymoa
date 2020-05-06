@@ -1,6 +1,9 @@
+"""Server
+=========
 
+"""
 from pymoa.executor.remote import RemoteExecutorServer, RemoteDataLogger
-from pymoa.executor.threading import AsyncThreadExecutor
+from pymoa.executor.threading import AsyncThreadExecutor, TrioPortal
 from pymoa.executor import apply_executor
 
 __all__ = ('RestServer', 'SSELogger')
@@ -8,13 +11,13 @@ __all__ = ('RestServer', 'SSELogger')
 
 class RestServer(RemoteExecutorServer):
 
-    # todo: fix exec_requests_in_executor blocking
-
     stream_objects = True
 
     stream_data_logs = True
 
     executor: AsyncThreadExecutor = None
+
+    to_quart_thread_portal: TrioPortal = None
 
     def __init__(
             self, create_executor_for_obj=True,
@@ -23,7 +26,11 @@ class RestServer(RemoteExecutorServer):
         super(RestServer, self).__init__(**kwargs)
 
         if exec_requests_in_executor:
+            # post_sse_channel is called from executor thread and not from the
+            # main quart thread. So we need to be able to schedule it to
+            # execute back in the quart thread. todo: fix this
             self.executor = AsyncThreadExecutor(name='ServerExecutor')
+            raise NotImplementedError
 
         self.create_executor_for_obj = create_executor_for_obj
         self.stream_objects = stream_objects
@@ -35,6 +42,7 @@ class RestServer(RemoteExecutorServer):
 
     async def start_executor(self):
         if self.executor:
+            self.to_quart_thread_portal = TrioPortal()
             await self.executor.start_executor()
 
     async def stop_executor(self, block=True):

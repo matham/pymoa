@@ -1,4 +1,4 @@
-Moa is a framework for describing and running experiments.
+PyMoa is a framework for describing and running experiments.
 
 For more information: http://matham.github.io/pymoa/index.html
 

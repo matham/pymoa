@@ -1,3 +1,7 @@
+"""Client
+=========
+
+"""
 from typing import AsyncGenerator, Tuple
 import uuid
 from asks import Session

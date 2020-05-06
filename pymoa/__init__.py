@@ -1,5 +1,5 @@
-"""Moa
-=======
+"""PyMoa
+========
 
 A framework for designing and running experiments in Python.
 

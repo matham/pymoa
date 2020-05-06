@@ -1,3 +1,7 @@
+"""Dummy remote executor
+========================
+
+"""
 from typing import Set, Tuple
 import time
 import trio
