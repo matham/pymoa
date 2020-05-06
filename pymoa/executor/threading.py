@@ -28,6 +28,8 @@ class ThreadExecutor(Executor):
 
     eof = object()
 
+    limiter: trio.CapacityLimiter = None
+
     def __init__(self, name='ThreadExecutor', **kwargs):
         super(ThreadExecutor, self).__init__(**kwargs)
         self.name = name
@@ -40,6 +42,7 @@ class ThreadExecutor(Executor):
         queue = self._exec_queue = stdlib_queue.Queue()
         # daemon=True because it might get left behind if we cancel, and in
         # this case shouldn't block process exit.
+        self.limiter = trio.CapacityLimiter(1)
         thread = self._thread = threading.Thread(
             target=self._worker_thread_fn,  name=self.name,  daemon=True,
             args=(queue, ))
@@ -57,7 +60,7 @@ class ThreadExecutor(Executor):
         if block:
             self._thread.join()
 
-        self._thread = self._exec_queue = None
+        self._thread = self._exec_queue = self.limiter = None
 
     def _worker_thread_fn(self, queue):
         # This is the function that runs in the worker thread to do the actual
@@ -85,19 +88,28 @@ class ThreadExecutor(Executor):
     @trio.hazmat.enable_ki_protection
     async def execute(self, obj, sync_fn, args=(), kwargs=None, callback=None):
         '''It's guaranteed sequential. '''
-        await trio.hazmat.checkpoint_if_cancelled()
-        self._exec_queue.put(
-            (obj, sync_fn, args, kwargs or {}, trio.hazmat.current_task(),
-             trio.hazmat.current_trio_token()))
+        async with self.limiter:
+            await trio.hazmat.checkpoint_if_cancelled()
+            self._exec_queue.put(
+                (obj, sync_fn, args, kwargs or {}, trio.hazmat.current_task(),
+                 trio.hazmat.current_trio_token()))
 
-        def abort(raise_cancel):
-            # cannot be canceled
-            return trio.hazmat.Abort.FAILED
-        res = await trio.hazmat.wait_task_rescheduled(abort)
+            def abort(raise_cancel):
+                # cannot be canceled
+                return trio.hazmat.Abort.FAILED
+            res = await trio.hazmat.wait_task_rescheduled(abort)
 
-        if obj is not self.eof:
-            self.call_execute_callback(obj, res, callback)
+            if callback is not NO_CALLBACK:
+                self.call_execute_callback(obj, res, callback)
         return res
+
+    async def get_echo_clock(self) -> Tuple[int, int, int]:
+        def get_time(*args):
+            return time.perf_counter_ns()
+
+        ts = time.perf_counter_ns()
+        t = await self.execute(None, get_time, callback=NO_CALLBACK)
+        return ts, t, time.perf_counter_ns()
 
 
 class AsyncThreadExecutor(Executor):
@@ -108,11 +120,11 @@ class AsyncThreadExecutor(Executor):
 
     _thread = None
 
-    send_channel: trio.MemorySendChannel = None
-
     name = "AsyncThreadExecutor"
 
-    eof = object()
+    limiter: trio.CapacityLimiter = None
+
+    cancel_nursery: trio.Nursery = None
 
     def __init__(self, name='AsyncThreadExecutor', **kwargs):
         super(AsyncThreadExecutor, self).__init__(**kwargs)
@@ -126,9 +138,12 @@ class AsyncThreadExecutor(Executor):
         # daemon=True because it might get left behind if we cancel, and in
         # this case shouldn't block process exit.
         event = trio.Event()
+        from_thread_portal = TrioPortal()
+        self.limiter = trio.CapacityLimiter(1)
+
         thread = self._thread = threading.Thread(
             target=self._worker_thread_fn,  name=self.name,  daemon=True,
-            args=(event,))
+            args=(event, from_thread_portal))
         thread.start()
         # wait until class variables are set
         await event.wait()
@@ -137,66 +152,46 @@ class AsyncThreadExecutor(Executor):
         if not self._thread:
             return
 
-        if not self.to_thread_portal or not self.send_channel:
+        # ideally start_executor cannot be canceled if thread still ran
+        if not self.to_thread_portal or self.limiter is None or \
+                self.cancel_nursery is None:
             self._thread = None
             return
 
-        await self.execute(self.eof, None)
+        async def cancel(*args):
+            self.cancel_nursery.cancel_scope.cancel()
+
+        await self.execute(None, cancel, callback=NO_CALLBACK)
         if block:
             self._thread.join()
 
-        self._thread = None
+        self._thread = self.limiter = self.to_thread_portal = \
+            self.cancel_nursery = None
 
-    def _worker_thread_fn(self, event):
+    def _worker_thread_fn(self, event, from_thread_portal: 'TrioPortal'):
         # This is the function that runs in the worker thread to do the actual
         # work
-        eof = self.eof
-
         async def runner():
-            self.to_thread_portal = TrioPortal()
-            self.send_channel, receive_channel = trio.open_memory_channel(
-                math.inf)
-            event.set()
+            async with trio.open_nursery() as nursery:
+                self.to_thread_portal = TrioPortal()
+                self.cancel_nursery = nursery
+                await from_thread_portal.run_sync(event.set)
 
-            async for (obj, async_fn, args, kwargs, task, token
-                       ) in receive_channel:
-                if obj is eof:
-                    try:
-                        token.run_sync_soon(trio.hazmat.reschedule, task)
-                    except trio.RunFinishedError:
-                        pass
-                    return
-
-                result = await outcome.acapture(async_fn, obj, *args, **kwargs)
-                try:
-                    token.run_sync_soon(trio.hazmat.reschedule, task, result)
-                except trio.RunFinishedError:
-                    # The entire run finished, so our particular tasks are
-                    # certainly long gone - it must have cancelled. Continue
-                    # eating the queue.
-                    pass
+                await trio.sleep(math.inf)
 
         trio.run(runner)
 
-    @trio.hazmat.enable_ki_protection
+    async def _execute_function(self, obj, async_fn, args, kwargs):
+        return await async_fn(obj, *args, **kwargs)
+
     async def execute(
             self, obj, async_fn, args=(), kwargs=None, callback=None):
-        '''It's guaranteed sequential. '''
-        await trio.hazmat.checkpoint_if_cancelled()
-        await self.to_thread_portal.run_sync(
-            self.send_channel.send_nowait, (
-                obj, async_fn, args, kwargs or {},
-                trio.hazmat.current_task(), trio.hazmat.current_trio_token()
-            )
-        )
+        async with self.limiter:
+            res = await self.to_thread_portal.run(
+                self._execute_function, obj, async_fn, args, kwargs or {})
 
-        def abort(raise_cancel):
-            # cannot be canceled
-            return trio.hazmat.Abort.FAILED
-        res = await trio.hazmat.wait_task_rescheduled(abort)
-
-        if obj is not self.eof:
-            self.call_execute_callback(obj, res, callback)
+            if callback is not NO_CALLBACK:
+                self.call_execute_callback(obj, res, callback)
         return res
 
     async def get_echo_clock(self) -> Tuple[int, int, int]:
@@ -249,8 +244,8 @@ class TrioPortal(object):
     async def _do_it_async(self, cb, fn, args):
         await trio.hazmat.checkpoint_if_cancelled()
         self._trio_token.run_sync_soon(
-            (cb, fn, args, trio.hazmat.current_task(),
-             trio.hazmat.current_trio_token()))
+            cb, fn, args, trio.hazmat.current_task(),
+            trio.hazmat.current_trio_token())
 
         def abort(raise_cancel):
             return trio.hazmat.Abort.FAILED

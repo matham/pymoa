@@ -15,15 +15,21 @@ __all__ = ('create_app', 'QuartRestServer')
 
 class QuartRestServer(RestServer):
 
+    quart_app = None
+
+    def __init__(self, quart_app, **kwargs):
+        super(QuartRestServer, self).__init__(**kwargs)
+        self.quart_app = quart_app
+
     def post_sse_channel(self, data, channel, channel_type):
         data = self.encode(data)
 
-        queues = current_app.sse_clients[channel] \
-            if channel in current_app.sse_clients else {}
-        queues2 = current_app.sse_clients[channel_type] \
-            if channel_type in current_app.sse_clients else {}
-        queues3 = current_app.sse_clients[''] \
-            if '' in current_app.sse_clients else {}
+        queues = self.quart_app.sse_clients[channel] \
+            if channel in self.quart_app.sse_clients else {}
+        queues2 = self.quart_app.sse_clients[channel_type] \
+            if channel_type in self.quart_app.sse_clients else {}
+        queues3 = self.quart_app.sse_clients[''] \
+            if '' in self.quart_app.sse_clients else {}
 
         queue: MaxSizeSkipDeque
         for queue in chain(
@@ -35,10 +41,8 @@ class QuartRestServer(RestServer):
 
 
 async def set_sse_callback():
-    server_executor = QuartRestServer()
-    await server_executor.start_executor()
+    await current_app.server_executor.start_executor()
 
-    current_app.server_executor = server_executor
     current_app.sse_clients = defaultdict(dict)
     current_app.max_buffer = 100 * 1024 * 1024
 
@@ -128,6 +132,7 @@ def handle_unexpected_error(error):
 
 def create_app() -> QuartTrio:
     app = QuartTrio(__name__)
+    app.server_executor = QuartRestServer(quart_app=app)
     app.before_first_request(set_sse_callback)
 
     app.add_url_rule(

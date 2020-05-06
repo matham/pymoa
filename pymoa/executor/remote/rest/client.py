@@ -40,6 +40,8 @@ class RestExecutor(RemoteExecutor):
 
     uri: str = ''
 
+    limiter: trio.CapacityLimiter = None
+
     def __init__(self, uri: str, connections: int = 1, **kwargs):
         super(RestExecutor, self).__init__(**kwargs)
         if uri.endswith('/'):
@@ -70,22 +72,24 @@ class RestExecutor(RemoteExecutor):
         self.registry.delete_instance(obj)
 
     async def start_executor(self):
-        pass
+        self.limiter = trio.CapacityLimiter(1)
 
     async def stop_executor(self, block=True):
-        pass
+        self.limiter = None
 
     async def execute(self, obj, sync_fn, args=(), kwargs=None, callback=None):
         data = self._get_execute_data(obj, sync_fn, args, kwargs, callback)
         data = self.encode(data)
 
         uri = f'{self.uri}/api/v1/objects/execute'
-        response = await self.session.post(
-            uri, data=data, headers={'Content-Type': 'application/json'})
-        response.raise_for_status()
+        async with self.limiter:
+            response = await self.session.post(
+                uri, data=data, headers={'Content-Type': 'application/json'})
+            response.raise_for_status()
 
-        res = self.decode(response.text)
-        self.call_execute_callback(obj, res, callback)
+            res = self.decode(response.text)
+            if callback is not NO_CALLBACK:
+                self.call_execute_callback(obj, res, callback)
         return res
 
     async def get_remote_object_info(self, obj, query):
@@ -135,6 +139,14 @@ class RestExecutor(RemoteExecutor):
 
         await self._apply_data_from_remote(
             obj, self.generate_sse_events(response))
+
+    async def get_data_from_remote(self, obj) -> AsyncGenerator:
+        params = {'channel': f'{obj.hash_val}.data'}
+        uri = f'{self.uri}/api/v1/stream'
+        response = await self.session.get(uri, params=params, stream=True)
+        raise_for_status(response)
+
+        return self.generate_sse_events(response)
 
     async def apply_execute_from_remote(self, obj, exclude_self=True):
         params = {'channel': f'{obj.hash_val}.execute'}

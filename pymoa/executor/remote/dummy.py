@@ -18,6 +18,8 @@ class DummyRemoteExecutor(RemoteExecutor):
 
     created_executor: Set[str] = set()
 
+    limiter: trio.CapacityLimiter = None
+
     def __init__(
             self, remote_registry: RemoteRegistry = None,
             local_registry: LocalRegistry = None, use_thread_executor=False,
@@ -73,23 +75,31 @@ class DummyRemoteExecutor(RemoteExecutor):
                 await remote_obj.executor.stop_executor(block=True)
 
     async def start_executor(self):
-        pass
+        self.limiter = trio.CapacityLimiter(1)
 
     async def stop_executor(self, block=True):
-        pass
+        self.limiter = None
 
     async def execute(self, obj, sync_fn, args=(), kwargs=None, callback=None):
         local_registry = self.local_registry
         hash_val = obj.hash_val
         fn_name = sync_fn.__name__
 
-        # pretend we are in the remote side now
-        res = await self.remote_registry.call_instance_method(
-            hash_val, fn_name, args, kwargs or {})
+        async with self.limiter:
+            # pretend we are in the remote side now
+            res = await self.remote_registry.call_instance_method(
+                hash_val, fn_name, args, kwargs or {})
 
-        # pretend we are now back in the calling side
-        self.call_execute_callback(obj, res, callback)
+            # pretend we are now back in the calling side
+            if callback is not NO_CALLBACK:
+                self.call_execute_callback(obj, res, callback)
         return res
+
+    async def get_echo_clock(self) -> Tuple[int, int, int]:
+        ts = time.perf_counter_ns()
+        async with self.limiter:
+            t = time.perf_counter_ns()
+        return ts, t, time.perf_counter_ns()
 
     async def get_remote_object_info(self, obj, query):
         raise NotImplementedError
