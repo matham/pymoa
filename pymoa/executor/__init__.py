@@ -1,7 +1,10 @@
 from functools import wraps, partial
 from asyncio import iscoroutinefunction
+from typing import Tuple
 
-__all__ = ('Executor', 'apply_executor')
+__all__ = ('Executor', 'apply_executor', 'NO_CALLBACK')
+
+NO_CALLBACK = '#@none'
 
 
 class Executor:

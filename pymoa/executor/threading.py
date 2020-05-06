@@ -2,15 +2,17 @@
 =============
 """
 
+from typing import Tuple
 import threading
 import math
 import queue as stdlib_queue
 import trio
 import outcome
+import time
 import logging
 
 
-from pymoa.executor import Executor
+from pymoa.executor import Executor, NO_CALLBACK
 
 
 __all__ = ('ThreadExecutor', 'AsyncThreadExecutor', 'TrioPortal')
@@ -51,7 +53,7 @@ class ThreadExecutor(Executor):
             self._thread = None
             return
 
-        await self.execute(self.eof, None)
+        await self.execute(self.eof, None, callback=NO_CALLBACK)
         if block:
             self._thread.join()
 

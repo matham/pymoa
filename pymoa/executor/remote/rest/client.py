@@ -2,9 +2,12 @@ from typing import AsyncGenerator
 import uuid
 from asks import Session
 from asks.errors import BadStatus
+import time
+import trio
 
 from pymoa.executor.remote.rest import SSEStream
 from pymoa.executor.remote import RemoteExecutor, RemoteReferencable
+from pymoa.executor import NO_CALLBACK
 
 __all__ = ('RestExecutor', )
 

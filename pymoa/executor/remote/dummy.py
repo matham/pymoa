@@ -3,6 +3,7 @@ from typing import Set
 from pymoa.executor.remote import RemoteExecutor, RemoteRegistry, \
     RemoteReferencable, LocalRegistry
 from pymoa.executor.threading import ThreadExecutor
+from pymoa.executor import NO_CALLBACK
 
 
 class DummyRemoteExecutor(RemoteExecutor):
