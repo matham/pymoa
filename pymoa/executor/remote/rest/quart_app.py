@@ -69,6 +69,13 @@ async def get_object_info():
     return await make_response(res, {'Content-Type': 'application/json'})
 
 
+async def get_echo_clock():
+    data = (await request.get_data()).decode('utf8')
+    res = await current_app.server_executor.get_echo_clock(data)
+
+    return await make_response(res, {'Content-Type': 'application/json'})
+
+
 async def sse():
     channel = request.args.get('channel', '')
     queue = MaxSizeSkipDeque(max_size=current_app.max_buffer)
@@ -133,6 +140,8 @@ def create_app() -> QuartTrio:
     app.add_url_rule(
         '/api/v1/objects/object', view_func=get_object_info, methods=['GET'])
     app.add_url_rule('/api/v1/stream', view_func=sse, methods=['GET'])
+    app.add_url_rule(
+        '/api/v1/echo_clock', view_func=get_echo_clock, methods=['GET'])
 
     # app.register_error_handler(Exception, handle_unexpected_error)
 

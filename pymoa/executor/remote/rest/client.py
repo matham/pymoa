@@ -1,4 +1,4 @@
-from typing import AsyncGenerator
+from typing import AsyncGenerator, Tuple
 import uuid
 from asks import Session
 from asks.errors import BadStatus
@@ -152,3 +152,16 @@ class RestExecutor(RemoteExecutor):
         raise_for_status(response)
 
         return self.generate_sse_events(response)
+
+    async def get_echo_clock(self) -> Tuple[int, int, int]:
+        start_time = time.perf_counter_ns()
+        data = await self._get_clock_data()
+        data = self.encode(data)
+
+        uri = f'{self.uri}/api/v1/echo_clock'
+        response = await self.session.get(
+            uri, data=data, headers={'Content-Type': 'application/json'})
+        response.raise_for_status()
+        server_time = self.decode(response.text)['server_time']
+
+        return start_time, server_time, time.perf_counter_ns()

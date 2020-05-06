@@ -32,6 +32,9 @@ class Executor:
         callback = getattr(obj, callback)
         callback(return_value)
 
+    async def get_echo_clock(self) -> Tuple[int, int, int]:
+        raise NotImplementedError
+
 
 def apply_executor(func=None, callback=None):
     if func is None:

@@ -1,7 +1,8 @@
-from typing import Dict, List, Any, Callable, Iterable, Tuple, Set
+from typing import Dict, List, Any, Callable, Iterable, Tuple, Set, AsyncGenerator
 import json
 import base64
 import hashlib
+import time
 
 from pymoa.data_logger import Loggable, ObjectLogger
 from pymoa.executor import Executor
@@ -42,10 +43,13 @@ class RemoteExecutorBase(Executor):
     async def apply_data_from_remote(self, obj):
         raise NotImplementedError
 
+    async def get_data_from_remote(self, obj):
+        raise NotImplementedError
+
     async def apply_execute_from_remote(self, obj, exclude_self=True):
         raise NotImplementedError
 
-    async def get_execute_from_remote(self, obj):
+    async def get_execute_from_remote(self, obj) -> AsyncGenerator:
         raise NotImplementedError
 
     def encode(self, data):
@@ -153,6 +157,9 @@ class RemoteExecutor(RemoteExecutorBase):
                 continue
 
             self.call_execute_callback(obj, return_value, callback)
+
+    async def _get_clock_data(self) -> dict:
+        return {}
 
 
 class RemoteExecutorServerBase:
@@ -271,6 +278,9 @@ class RemoteExecutorServer(RemoteExecutorServerBase):
             raise ValueError(f'Unrecognized query {query}')
 
         return data
+
+    async def _get_clock_data(self, data: dict) -> dict:
+        return {'server_time': time.perf_counter_ns()}
 
 
 class RemoteDataLogger(ObjectLogger):

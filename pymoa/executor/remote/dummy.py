@@ -1,4 +1,6 @@
-from typing import Set
+from typing import Set, Tuple
+import time
+import trio
 
 from pymoa.executor.remote import RemoteExecutor, RemoteRegistry, \
     RemoteReferencable, LocalRegistry
@@ -99,6 +101,9 @@ class DummyRemoteExecutor(RemoteExecutor):
         raise NotImplementedError
 
     async def apply_data_from_remote(self, obj):
+        raise NotImplementedError
+
+    async def get_data_from_remote(self, obj):
         raise NotImplementedError
 
     async def apply_execute_from_remote(self, obj, exclude_self=True):

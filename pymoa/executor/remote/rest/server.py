@@ -107,6 +107,11 @@ class RestServer(RemoteExecutorServer):
         data = await self._get_object_info_data(data)
         return self.encode(data)
 
+    async def get_echo_clock(self, data: str) -> str:
+        data = self.decode(data)
+        data = await self._get_clock_data(data)
+        return self.encode(data)
+
 
 class SSELogger(RemoteDataLogger):
 

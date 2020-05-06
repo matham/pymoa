@@ -199,6 +199,14 @@ class AsyncThreadExecutor(Executor):
             self.call_execute_callback(obj, res, callback)
         return res
 
+    async def get_echo_clock(self) -> Tuple[int, int, int]:
+        async def get_time(*args):
+            return time.perf_counter_ns()
+
+        ts = time.perf_counter_ns()
+        t = await self.execute(None, get_time, callback=NO_CALLBACK)
+        return ts, t, time.perf_counter_ns()
+
 
 class TrioPortal(object):
 
