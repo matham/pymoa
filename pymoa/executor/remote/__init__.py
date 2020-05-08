@@ -16,17 +16,17 @@ from pymoa.utils import get_class_bases
 __all__ = (
     'RemoteExecutorBase', 'RemoteExecutor', 'RemoteExecutorServerBase',
     'RemoteExecutorServer',
-    'RemoteDataLogger', 'RemoteReferencable', 'InstanceRegistry',
+    'RemoteDataLogger', 'RemoteReferenceable', 'InstanceRegistry',
     'RemoteRegistry', 'LocalRegistry')
 
 
 class RemoteExecutorBase(Executor):
 
     async def ensure_remote_instance(
-            self, obj: 'RemoteReferencable', *args, **kwargs):
+            self, obj: 'RemoteReferenceable', *args, **kwargs):
         raise NotImplementedError
 
-    async def delete_remote_instance(self, obj: 'RemoteReferencable'):
+    async def delete_remote_instance(self, obj: 'RemoteReferenceable'):
         raise NotImplementedError
 
     async def get_remote_object_info(self, obj, query):
@@ -82,7 +82,7 @@ class RemoteExecutor(RemoteExecutorBase):
         return self.registry.decode_json(data)
 
     def _get_ensure_remote_instance_data(
-            self, obj: 'RemoteReferencable', args, kwargs):
+            self, obj: 'RemoteReferenceable', args, kwargs):
         # todo: handle specifying remote executor for this instance
         # todo: add root executor method to create instance and
         #  call that remotely auto
@@ -103,7 +103,7 @@ class RemoteExecutor(RemoteExecutorBase):
         }
         return data
 
-    def _get_delete_remote_instance_data(self, obj: 'RemoteReferencable'):
+    def _get_delete_remote_instance_data(self, obj: 'RemoteReferenceable'):
         return {'hash_val': obj.hash_val}
 
     def _get_execute_data(
@@ -216,7 +216,7 @@ class RemoteExecutorServer(RemoteExecutorServerBase):
         return self.registry.decode_json(data)
 
     async def _create_instance(
-            self, data: dict) -> ('RemoteReferencable', dict):
+            self, data: dict) -> ('RemoteReferenceable', dict):
         hash_val = data['hash_val']
         cls_name = data['cls_name']
         args = data['args']
@@ -235,7 +235,7 @@ class RemoteExecutorServer(RemoteExecutorServerBase):
         return obj, data
 
     async def _delete_instance(
-            self, data: dict) -> ('RemoteReferencable', dict):
+            self, data: dict) -> ('RemoteReferenceable', dict):
         hash_val = data['hash_val']
         obj = self.registry.delete_instance(hash_val)
 
@@ -322,9 +322,9 @@ class RemoteDataLogger(ObjectLogger):
 
 class InstanceRegistry:
 
-    referencable_classes: Dict[str, Callable] = {}
+    referenceable_classes: Dict[str, Callable] = {}
 
-    hashed_instances: Dict[str, 'RemoteReferencable'] = {}
+    hashed_instances: Dict[str, 'RemoteReferenceable'] = {}
 
     json_coders: Dict[str, Tuple[type, Callable, Callable]] = {}
 
@@ -340,7 +340,7 @@ class InstanceRegistry:
         else:
             cls_name = mod + ':' + class_to_register.__qualname__
 
-        cls.referencable_classes[cls_name] = class_to_register
+        cls.referenceable_classes[cls_name] = class_to_register
 
     @classmethod
     def register_json_coder(
@@ -348,7 +348,7 @@ class InstanceRegistry:
             decoder: Callable):
         cls.json_coders[f'@{name}'] = class_to_register, encoder, decoder
 
-    def referencable_json_decoder(self, dct: dict):
+    def referenceable_json_decoder(self, dct: dict):
         if len(dct) != 1:
             return dct
 
@@ -366,11 +366,11 @@ class InstanceRegistry:
 
     def decode_json(self, data: str, default: Any = None):
         if data:
-            return json.loads(data, object_hook=self.referencable_json_decoder)
+            return json.loads(data, object_hook=self.referenceable_json_decoder)
         return default
 
     def encode_json_func(self, obj):
-        if isinstance(obj, RemoteReferencable):
+        if isinstance(obj, RemoteReferenceable):
             return {'@remote_object': obj.hash_val}
         if isinstance(obj, (bytes, bytearray)):
             data = base64.standard_b64encode(obj).decode('ascii')
@@ -391,15 +391,15 @@ class RemoteRegistry(InstanceRegistry):
 
     def create_instance(
             self, cls_name: str, args: tuple, kwargs: dict, config: dict
-    ) -> 'RemoteReferencable':
+    ) -> 'RemoteReferenceable':
 
-        obj = self.referencable_classes[cls_name](*args, **kwargs)
+        obj = self.referenceable_classes[cls_name](*args, **kwargs)
         for name, value in config.items():
             setattr(obj, name, value)
         self.hashed_instances[obj.hash_val] = obj
         return obj
 
-    def delete_instance(self, obj_hash: str) -> 'RemoteReferencable':
+    def delete_instance(self, obj_hash: str) -> 'RemoteReferenceable':
         return self.hashed_instances.pop(obj_hash)
 
     async def call_instance_method(
@@ -411,14 +411,14 @@ class RemoteRegistry(InstanceRegistry):
 
 class LocalRegistry(InstanceRegistry):
 
-    def add_instance(self, obj: 'RemoteReferencable'):
+    def add_instance(self, obj: 'RemoteReferenceable'):
         self.hashed_instances[obj.hash_val] = obj
 
-    def delete_instance(self, obj: 'RemoteReferencable'):
+    def delete_instance(self, obj: 'RemoteReferenceable'):
         del self.hashed_instances[obj.hash_val]
 
 
-class ReferencableMetaclass(type):
+class ReferenceableMetaclass(type):
 
     def __new__(mcs, *args, **kwargs):
         cls = super().__new__(mcs, *args, **kwargs)
@@ -426,7 +426,7 @@ class ReferencableMetaclass(type):
         return cls
 
 
-class RemoteReferencable(Loggable, metaclass=ReferencableMetaclass):
+class RemoteReferenceable(Loggable, metaclass=ReferenceableMetaclass):
 
     _config_props_: Tuple[str] = ('name', )
 
@@ -437,7 +437,7 @@ class RemoteReferencable(Loggable, metaclass=ReferencableMetaclass):
     _config_props: List[str] = None
 
     def __init__(self, executor: Executor = None, **kwargs):
-        super(RemoteReferencable, self).__init__(**kwargs)
+        super(RemoteReferenceable, self).__init__(**kwargs)
         self.executor = executor
 
     @property

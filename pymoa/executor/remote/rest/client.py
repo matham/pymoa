@@ -10,7 +10,7 @@ import time
 import trio
 
 from pymoa.executor.remote.rest import SSEStream
-from pymoa.executor.remote import RemoteExecutor, RemoteReferencable
+from pymoa.executor.remote import RemoteExecutor, RemoteReferenceable
 from pymoa.executor import NO_CALLBACK
 
 __all__ = ('RestExecutor', )
@@ -55,7 +55,7 @@ class RestExecutor(RemoteExecutor):
         self._uuid = uuid.uuid4().bytes
 
     async def ensure_remote_instance(
-            self, obj: 'RemoteReferencable', *args, **kwargs):
+            self, obj: 'RemoteReferenceable', *args, **kwargs):
         data = self._get_ensure_remote_instance_data(obj, args, kwargs)
         data = self.encode(data)
 
@@ -65,7 +65,7 @@ class RestExecutor(RemoteExecutor):
             uri, data=data, headers={'Content-Type': 'application/json'})
         response.raise_for_status()
 
-    async def delete_remote_instance(self, obj: 'RemoteReferencable'):
+    async def delete_remote_instance(self, obj: 'RemoteReferenceable'):
         data = self._get_delete_remote_instance_data(obj)
         data = self.encode(data)
 

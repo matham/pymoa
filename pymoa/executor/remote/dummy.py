@@ -7,7 +7,7 @@ import time
 import trio
 
 from pymoa.executor.remote import RemoteExecutor, RemoteRegistry, \
-    RemoteReferencable, LocalRegistry
+    RemoteReferenceable, LocalRegistry
 from pymoa.executor.threading import ThreadExecutor
 from pymoa.executor import NO_CALLBACK
 
@@ -41,7 +41,7 @@ class DummyRemoteExecutor(RemoteExecutor):
         self.created_executor = set()
 
     async def ensure_remote_instance(
-            self, obj: 'RemoteReferencable', *args, **kwargs):
+            self, obj: 'RemoteReferenceable', *args, **kwargs):
         local_registry = self.local_registry
         config = {k: getattr(obj, k) for k in obj.config_props}
         hash_val = obj.hash_val
@@ -67,7 +67,7 @@ class DummyRemoteExecutor(RemoteExecutor):
             self.created_executor.add(remote_obj.hash_val)
             await remote_obj.executor.start_executor()
 
-    async def delete_remote_instance(self, obj: 'RemoteReferencable'):
+    async def delete_remote_instance(self, obj: 'RemoteReferenceable'):
         hash_val = obj.hash_val
         self.local_registry.delete_instance(obj)
 

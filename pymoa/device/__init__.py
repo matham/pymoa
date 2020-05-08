@@ -4,12 +4,12 @@
 Device module for interfacing Moa with devices (e.g switches, ADC, etc.).
 """
 
-from pymoa.executor.remote import RemoteReferencable
+from pymoa.executor.remote import RemoteReferenceable
 
 __all__ = ('Device', )
 
 
-class Device(RemoteReferencable):
+class Device(RemoteReferenceable):
     """The base class for all devices interfacing with Moa.
 
     :Events:
