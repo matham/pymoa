@@ -19,12 +19,14 @@ from pymoa.utils import get_class_bases
 
 __all__ = (
     'RemoteExecutorBase', 'RemoteExecutor', 'RemoteExecutorServerBase',
-    'RemoteExecutorServer',
-    'RemoteDataLogger', 'RemoteReferenceable', 'InstanceRegistry',
-    'RemoteRegistry', 'LocalRegistry')
+    'RemoteExecutorServer', 'RemoteDataLogger', 'RemoteReferenceable',
+    'InstanceRegistry', 'RemoteRegistry', 'LocalRegistry')
 
 
 class RemoteExecutorBase(Executor):
+    """Base class for executors that execute the methods on remote objects,
+    rather than within process.
+    """
 
     async def ensure_remote_instance(
             self, obj: 'RemoteReferenceable', *args, **kwargs):
@@ -68,6 +70,7 @@ class RemoteExecutorBase(Executor):
 
 
 class RemoteExecutor(RemoteExecutorBase):
+    """Concrete executor that will execute objects remotely."""
 
     registry: 'LocalRegistry' = None
 
@@ -173,6 +176,9 @@ class RemoteExecutor(RemoteExecutorBase):
 
 
 class RemoteExecutorServerBase:
+    """Base class for the server side handling of remote object method
+    execution.
+    """
 
     async def ensure_instance(self, *args, **kwargs):
         raise NotImplementedError
@@ -194,6 +200,8 @@ class RemoteExecutorServerBase:
 
 
 class RemoteExecutorServer(RemoteExecutorServerBase):
+    """Concrete server side handler of remote object method execution.
+    """
 
     registry: 'RemoteRegistry' = None
 
@@ -296,6 +304,8 @@ class RemoteExecutorServer(RemoteExecutorServerBase):
 
 
 class RemoteDataLogger(ObjectLogger):
+    """Data logger used to log all data updates and stream it to clients.
+    """
 
     def _get_log_item_data(self, obj, props, trigger_name, trigger_value):
         data = {
@@ -325,6 +335,9 @@ class RemoteDataLogger(ObjectLogger):
 
 
 class InstanceRegistry:
+    """Registry that contains objects know by the register that can be
+    referenced.
+    """
 
     referenceable_classes: Dict[str, Callable] = {}
 
@@ -392,6 +405,8 @@ class InstanceRegistry:
 
 
 class RemoteRegistry(InstanceRegistry):
+    """Server side object registry.
+    """
 
     def create_instance(
             self, cls_name: str, args: tuple, kwargs: dict, config: dict
@@ -414,6 +429,8 @@ class RemoteRegistry(InstanceRegistry):
 
 
 class LocalRegistry(InstanceRegistry):
+    """Client side object registry.
+    """
 
     def add_instance(self, obj: 'RemoteReferenceable'):
         self.hashed_instances[obj.hash_val] = obj
@@ -431,6 +448,8 @@ class ReferenceableMetaclass(type):
 
 
 class RemoteReferenceable(Loggable, metaclass=ReferenceableMetaclass):
+    """Base class for objects that can be referenced remotely.
+    """
 
     _config_props_: Tuple[str] = ('name', )
 

@@ -22,6 +22,9 @@ __all__ = ('MoaStage', )
 
 
 class MoaStage(Loggable):
+    """Base stage for structuring an experiment.
+
+    """
 
     __events__ = (
         'on_stage_start', 'on_trial_start', 'on_trial_end', 'on_stage_end')

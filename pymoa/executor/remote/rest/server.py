@@ -10,6 +10,8 @@ __all__ = ('RestServer', 'SSELogger')
 
 
 class RestServer(RemoteExecutorServer):
+    """Rest server side class to handle incoming executor requests.
+    """
 
     stream_objects = True
 
@@ -120,6 +122,9 @@ class RestServer(RemoteExecutorServer):
 
 
 class SSELogger(RemoteDataLogger):
+    """Logs all the properties and events to the server's sse data stream
+    channel.
+    """
 
     sse_post_callback = None
 

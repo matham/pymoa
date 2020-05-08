@@ -18,6 +18,8 @@ __all__ = ('GateStage', 'DigitalGateStage', 'AnalogGateStage')
 
 
 class GateStage(MoaStage):
+    """Stage that waits until a device reaches some state.
+    """
 
     _logged_trigger_names_ = ('state', )
 
@@ -82,6 +84,8 @@ class GateStage(MoaStage):
 
 
 class DigitalGateStage(GateStage):
+    """Stage that waits until a digital device becomes :attr:`exit_state`.
+    """
 
     def check_done(self, t: float, value: bool):
         return value == self.exit_state
@@ -92,6 +96,8 @@ class DigitalGateStage(GateStage):
 
 
 class AnalogGateStage(GateStage):
+    """Stage that waits until a analog device enters a range of values.
+    """
 
     def check_done(self, t: float, value: float):
         return self.min <= value <= self.max

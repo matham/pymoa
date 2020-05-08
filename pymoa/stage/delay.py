@@ -27,6 +27,8 @@ class Delay(MoaStage):
 
 
 class UniformRandomDelay(Delay):
+    """Stage that waits for a uniform random delay.
+    """
 
     async def do_trial(self):
         self.delay = random.uniform(self.min, self.max)
@@ -43,6 +45,8 @@ class UniformRandomDelay(Delay):
 
 
 class GaussianRandomDelay(Delay):
+    """Stage that waits for a Gaussian random delay.
+    """
 
     async def do_trial(self):
         self.delay = max(0, random.gauss(self.mu, self.sigma))

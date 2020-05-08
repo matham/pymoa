@@ -75,6 +75,9 @@ class AnalogPort(Port):
 
 
 class RandomAnalogChannel(AnalogChannel):
+    """A channel that generates random analog values. Mainly useful as a
+    testing device.
+    """
 
     def executor_callback(self, return_value):
         self.state, self.timestamp = return_value
@@ -101,6 +104,9 @@ class RandomAnalogChannel(AnalogChannel):
 
 
 class RandomAnalogPort(AnalogPort):
+    """A port that generates random analog values. Mainly useful as a
+    testing device.
+    """
 
     _logged_names_ = ('chan0', 'chan1')
 

@@ -14,6 +14,11 @@ __all__ = (
 
 
 def get_class_bases(cls):
+    """Gets all the base-classes of the class.
+
+    :param cls:
+    :return:
+    """
     for base in cls.__bases__:
         if base.__name__ == 'object':
             break
@@ -23,6 +28,8 @@ def get_class_bases(cls):
 
 
 class async_zip(object):
+    """Like ``zip``, but for async iterables.
+    """
 
     def __init__(self, *largs):
         self.aiterators = [obj.__aiter__() for obj in largs]
@@ -146,6 +153,9 @@ class AsyncCallbackQueue(object):
 
 
 class MaxSizeSkipDeque:
+    """Async queue that skips appends when full, but indicates to consumer that
+    [ackets were skipped.
+    """
 
     send_channel: trio.MemorySendChannel = None
 

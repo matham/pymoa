@@ -20,6 +20,8 @@ __all__ = ('create_app', 'QuartRestServer')
 
 
 class QuartRestServer(RestServer):
+    """Quart server side handler.
+    """
 
     quart_app = None
 
@@ -137,6 +139,8 @@ def handle_unexpected_error(error):
 
 
 def create_app() -> QuartTrio:
+    """Creates the quart app.
+    """
     app = QuartTrio(__name__)
     app.server_executor = QuartRestServer(quart_app=app)
     app.before_first_request(set_sse_callback)

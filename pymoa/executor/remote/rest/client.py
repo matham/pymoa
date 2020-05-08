@@ -39,6 +39,9 @@ def raise_for_status(response):
 
 
 class RestExecutor(RemoteExecutor):
+    """Executor that sends all requests to a remote server to be executed
+    there, using a rest API.
+    """
 
     session: Session = None
 

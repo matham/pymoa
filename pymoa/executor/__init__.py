@@ -9,9 +9,15 @@ from typing import Tuple
 __all__ = ('Executor', 'apply_executor', 'NO_CALLBACK')
 
 NO_CALLBACK = '#@none'
+"""Can be used with :func:`apply_executor` to indicate that no callback should
+be used.
+"""
 
 
 class Executor:
+    """Executor that can be used to execute a method in a different context,
+    e.g. in a different thread or across the network in a server.
+    """
 
     name = 'Executor'
 
@@ -43,6 +49,8 @@ class Executor:
 
 
 def apply_executor(func=None, callback=None):
+    """Decorator that calls the method using the executor.
+    """
     if func is None:
         return partial(apply_executor, callback=callback)
 

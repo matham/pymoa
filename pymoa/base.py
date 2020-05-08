@@ -7,6 +7,9 @@ __all__ = ('MoaBase', )
 
 
 class MoaBase:
+    """Base class for all Moa stage and device objects.
+
+    """
 
     name: str = ''
 

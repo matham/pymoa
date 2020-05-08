@@ -11,10 +11,12 @@ from kivy.event import EventDispatcher
 from pymoa.utils import get_class_bases
 from pymoa.base import MoaBase
 
-__all__ = ('Loggable', 'ObjectLogger')
+__all__ = ('Loggable', 'ObjectLogger', 'SimpleCSVLogger')
 
 
 class Loggable(EventDispatcher, MoaBase):
+    """Base class for devices that support logging its properties or events.
+    """
 
     _logged_names_: Tuple[str] = ()
 
@@ -74,6 +76,9 @@ class Loggable(EventDispatcher, MoaBase):
 
 
 class ObjectLogger:
+    """Logger that can hook into a :class:`Loggable` instance and log all its
+    loggable properties.
+    """
 
     logged_instances: Dict[Loggable, List[Tuple[str, Any]]] = {}
 
@@ -153,6 +158,9 @@ class ObjectLogger:
 
 
 class SimpleCSVLogger(ObjectLogger):
+    """Concrete implementation of :class:`ObjectLogger` that logs to a csv
+    file.
+    """
 
     filename: str = ''
 

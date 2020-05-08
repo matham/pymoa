@@ -79,6 +79,9 @@ class DigitalPort(Port):
 
 
 class RandomDigitalChannel(DigitalChannel):
+    """A channel that generates random digital values. Mainly useful as a
+    testing device.
+    """
 
     def executor_callback(self, return_value):
         self.state, self.timestamp = return_value
@@ -105,6 +108,9 @@ class RandomDigitalChannel(DigitalChannel):
 
 
 class RandomDigitalPort(DigitalPort):
+    """A port that generates random digital values. Mainly useful as a
+    testing device.
+    """
 
     _logged_names_ = ('chan0', 'chan1')
 

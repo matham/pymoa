@@ -10,6 +10,9 @@ __all__ = ('SSEStream', )
 
 
 class SSEStream:
+    """Generator that takes a ``asks`` streaming response object and
+    decodes and yields individual sse events.
+    """
 
     @classmethod
     def set_sse_field(cls, event: dict, buffer: list) -> list:

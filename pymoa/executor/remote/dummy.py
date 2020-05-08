@@ -13,6 +13,11 @@ from pymoa.executor import NO_CALLBACK
 
 
 class DummyRemoteExecutor(RemoteExecutor):
+    """Executor that executes the within the same thread, but creates
+    duplicates of the objects and executes the methods on them.
+
+    This can be used for testing executors in a client/server type manner.
+    """
 
     remote_registry: RemoteRegistry = None
 

@@ -19,6 +19,8 @@ __all__ = ('ThreadExecutor', 'AsyncThreadExecutor', 'TrioPortal')
 
 
 class ThreadExecutor(Executor):
+    """Executor that executes functions in a secondary thread.
+    """
 
     _thread = None
 
@@ -113,6 +115,9 @@ class ThreadExecutor(Executor):
 
 
 class AsyncThreadExecutor(Executor):
+    """Executor that executes async functions in a trio event loop in a
+    secondary thread.
+    """
 
     supports_coroutine = True
 
@@ -206,6 +211,8 @@ class AsyncThreadExecutor(Executor):
 
 
 class TrioPortal(object):
+    """Portal for communicating with trio from a different thread.
+    """
 
     def __init__(self, trio_token=None):
         if trio_token is None:
