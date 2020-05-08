@@ -14,6 +14,8 @@ from queue import Full
 from pymoa.utils import MaxSizeSkipDeque
 from pymoa.executor.remote.rest.server import RestServer
 
+import pymoa.executor.remote.referable_class_register
+
 __all__ = ('create_app', 'QuartRestServer')
 
 

@@ -1,6 +1,10 @@
 """Remote
 =========
 
+Import ``pymoa.executor.remote.referable_class_register`` to automatically
+register device classes with the InstanceRegistry so that it could be created
+remotely.
+
 """
 from typing import Dict, List, Any, Callable, Tuple, Set, AsyncGenerator
 import json
