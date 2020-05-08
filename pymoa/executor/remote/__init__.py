@@ -83,7 +83,9 @@ class RemoteExecutor(RemoteExecutorBase):
 
     def _get_ensure_remote_instance_data(
             self, obj: 'RemoteReferencable', args, kwargs):
-        # TODO: handle specifying remote executor for this instance
+        # todo: handle specifying remote executor for this instance
+        # todo: add root executor method to create instance and
+        #  call that remotely auto
         config = {k: getattr(obj, k) for k in obj.config_props}
         mod = obj.__class__.__module__
         if mod is None:
@@ -191,18 +193,20 @@ class RemoteExecutorServer(RemoteExecutorServerBase):
 
     registry: 'RemoteRegistry' = None
 
-    create_executor_for_obj = False
+    create_executor_for_obj = True
 
     created_executor: Set[str] = set()
 
     stream_data_logger: 'RemoteDataLogger' = None
 
-    def __init__(self, registry: 'RemoteRegistry' = None, **kwargs):
+    def __init__(self, registry: 'RemoteRegistry' = None,
+                 create_executor_for_obj=True, **kwargs):
         super(RemoteExecutorServer, self).__init__(**kwargs)
         if registry is None:
             registry = RemoteRegistry()
         self.registry = registry
 
+        self.create_executor_for_obj = create_executor_for_obj
         self.created_executor = set()
 
     def encode(self, data):

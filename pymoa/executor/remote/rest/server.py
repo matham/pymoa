@@ -20,8 +20,7 @@ class RestServer(RemoteExecutorServer):
     to_quart_thread_portal: TrioPortal = None
 
     def __init__(
-            self, create_executor_for_obj=True,
-            exec_requests_in_executor=False, stream_objects=True,
+            self, exec_requests_in_executor=False, stream_objects=True,
             stream_data_logs=True, **kwargs):
         super(RestServer, self).__init__(**kwargs)
 
@@ -32,7 +31,6 @@ class RestServer(RemoteExecutorServer):
             self.executor = AsyncThreadExecutor(name='ServerExecutor')
             raise NotImplementedError
 
-        self.create_executor_for_obj = create_executor_for_obj
         self.stream_objects = stream_objects
         self.stream_data_logs = stream_data_logs
 

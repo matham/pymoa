@@ -116,6 +116,8 @@ class AsyncThreadExecutor(Executor):
 
     supports_coroutine = True
 
+    supports_non_coroutine = False
+
     to_thread_portal: 'TrioPortal' = None
 
     _thread = None

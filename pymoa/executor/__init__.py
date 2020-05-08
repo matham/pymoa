@@ -17,6 +17,8 @@ class Executor:
 
     supports_coroutine = False
 
+    supports_non_coroutine = True
+
     async def start_executor(self):
         raise NotImplementedError
 
@@ -61,6 +63,11 @@ def apply_executor(func=None, callback=None):
             raise ValueError(
                 f'apply_executor called with async coroutine "{func}", but '
                 f'Executor "{executor}" does not support coroutines')
+
+        if not coro and not executor.supports_non_coroutine:
+            raise ValueError(
+                f'apply_executor called with normal function "{func}", but '
+                f'Executor "{executor}" only supports async coroutines')
         return await executor.execute(self, func, args, kwargs, callback)
 
     return wrapper
