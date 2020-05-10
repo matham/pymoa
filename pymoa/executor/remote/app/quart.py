@@ -5,7 +5,7 @@
 # todo: investigate compression and no-cache for data
 from http import HTTPStatus
 from quart_trio import QuartTrio
-from quart import make_response, request, current_app, jsonify
+from quart import make_response, request, current_app, jsonify, websocket
 from collections import defaultdict
 from itertools import chain
 import json
@@ -13,14 +13,17 @@ from queue import Full
 
 from pymoa.utils import MaxSizeSkipDeque
 from pymoa.executor.remote.rest.server import RestServer
+from pymoa.executor.remote.socket.server import SocketServer
 
 import pymoa.executor.remote.referable_class_register
 
-__all__ = ('create_app', 'QuartRestServer')
+__all__ = ('create_app', 'QuartRestServer', 'QuartSocketServer')
+
+MAX_QUEUE_SIZE = 20
 
 
 class QuartRestServer(RestServer):
-    """Quart server side handler.
+    """Quart server side rest handler.
     """
 
     quart_app = None
@@ -30,66 +33,97 @@ class QuartRestServer(RestServer):
         self.quart_app = quart_app
 
     def post_sse_channel(self, data, channel_type, hash_val):
-        channel = f'{hash_val}.{channel_type}'
-        data = self.encode(data)
+        post_sse_channel(self.quart_app, data, channel_type, hash_val)
 
-        queues = self.quart_app.sse_clients[channel] \
-            if channel in self.quart_app.sse_clients else {}
-        queues2 = self.quart_app.sse_clients[channel_type] \
-            if channel_type in self.quart_app.sse_clients else {}
-        queues3 = self.quart_app.sse_clients[hash_val] \
-            if hash_val in self.quart_app.sse_clients else {}
-        queues4 = self.quart_app.sse_clients[''] \
-            if '' in self.quart_app.sse_clients else {}
 
+class QuartSocketServer(SocketServer):
+    """Quart server side socket handler.
+    """
+
+    quart_app = None
+
+    def __init__(self, quart_app, **kwargs):
+        super(QuartSocketServer, self).__init__(**kwargs)
+        self.quart_app = quart_app
+
+    async def decode(self, data):
+        raise NotImplementedError
+
+    def post_stream_channel(self, data, channel_type, hash_val):
+        post_sse_channel(self.quart_app, data, channel_type, hash_val)
+
+    def decode_json_buffers(self, data) -> dict:
+        if len(data) < 16:
+            raise ValueError('Unable to parse message headers')
+
+        msg_len, json_bytes, num_buffers = \
+            self.registry.decode_json_buffers_header(data[:16])
+
+        data = data[16:]
+        if len(data) != msg_len:
+            raise ValueError('Unable to parse message data')
+
+        return self.registry.decode_json_buffers(data, json_bytes, num_buffers)
+
+
+def post_sse_channel(app, data, channel_type, hash_val):
+    channel = f'{hash_val}.{channel_type}'
+
+    queues = app.sse_clients[channel] if channel in app.sse_clients else {}
+    queues2 = app.sse_clients[channel_type] \
+        if channel_type in app.sse_clients else {}
+    queues3 = app.sse_clients[hash_val] if hash_val in app.sse_clients else {}
+    queues4 = app.sse_clients[''] if '' in app.sse_clients else {}
+
+    sse_queues = list(chain(
+        queues.values(), queues2.values(), queues3.values(), queues4.values()))
+
+    if sse_queues:
         queue: MaxSizeSkipDeque
-        for queue in chain(
-                queues.values(), queues2.values(), queues3.values(),
-                queues4.values()):
+        for queue in sse_queues:
             try:
-                queue.add_item(
-                    (data, channel_type, hash_val, channel),
-                    len(data) + len(channel) * 2 - 1)
+                queue.add_item((data, channel_type, hash_val, channel), 1)
             except Full:
                 pass
 
 
-async def set_sse_callback():
-    await current_app.server_executor.start_executor()
+async def app_init():
+    await current_app.rest_executor.start_executor()
+    await current_app.socket_executor.start_executor()
 
     current_app.sse_clients = defaultdict(dict)
-    current_app.max_buffer = 100 * 1024 * 1024
+    current_app.max_buffer = MAX_QUEUE_SIZE
 
 
 async def ensure_instance():
     data = (await request.get_data()).decode('utf8')
-    await current_app.server_executor.ensure_instance(data)
+    await current_app.rest_executor.ensure_instance(data)
     return '', HTTPStatus.NO_CONTENT
 
 
 async def delete_instance():
     data = (await request.get_data()).decode('utf8')
-    await current_app.server_executor.delete_instance(data)
+    await current_app.rest_executor.delete_instance(data)
     return '', HTTPStatus.NO_CONTENT
 
 
 async def execute():
     data = (await request.get_data()).decode('utf8')
-    res = await current_app.server_executor.execute(data)
+    res = await current_app.rest_executor.execute(data)
 
     return await make_response(res, {'Content-Type': 'application/json'})
 
 
 async def get_object_info():
     data = (await request.get_data()).decode('utf8')
-    res = await current_app.server_executor.get_object_info(data)
+    res = await current_app.rest_executor.get_object_info(data)
 
     return await make_response(res, {'Content-Type': 'application/json'})
 
 
 async def get_echo_clock():
     data = (await request.get_data()).decode('utf8')
-    res = await current_app.server_executor.get_echo_clock(data)
+    res = await current_app.rest_executor.get_echo_clock(data)
 
     return await make_response(res, {'Content-Type': 'application/json'})
 
@@ -99,6 +133,7 @@ async def sse():
     queue = MaxSizeSkipDeque(max_size=current_app.max_buffer)
     key = object()
     current_app.sse_clients[channel][key] = queue
+    executor: QuartRestServer = current_app.rest_executor
 
     # todo: send alive with timeout in case skipped packets
 
@@ -110,6 +145,7 @@ async def sse():
 
             async for (data, channel_type, hash_val, data_channel), \
                     packet in queue:
+                data = executor.encode(data)
                 id_data = json.dumps(
                     (packet, channel_type, hash_val, data_channel))
                 message = f"data: {data}\nid: {id_data}\n\n"
@@ -131,6 +167,77 @@ async def sse():
     return response
 
 
+async def websocket_handler():
+    executor: QuartSocketServer = current_app.socket_executor
+    await websocket.send(executor.encode({'data': 'hello'}))
+
+    while True:
+        msg = executor.decode_json_buffers(await websocket.receive())
+        cmd = msg['cmd']
+        packet = msg['packet']
+        data = msg['data']
+
+        if cmd == 'ensure_remote_instance':
+            res = await executor.ensure_instance(data)
+        elif cmd == 'delete_remote_instance':
+            res = await executor.delete_instance(data)
+        elif cmd == 'execute':
+            res = await executor.execute(data)
+        elif cmd == 'get_remote_object_info':
+            res = await executor.get_object_info(data)
+        elif cmd == 'get_echo_clock':
+            res = await executor.get_echo_clock(data)
+        else:
+            raise Exception(f'Unknown command "{cmd}"')
+
+        ret_data = {
+            'data': res,
+            'cmd': cmd,
+            'packet': packet,
+        }
+
+        await websocket.send(executor.encode(ret_data))
+
+
+async def websocket_stream_handler(channel):
+    executor: QuartSocketServer = current_app.socket_executor
+    await websocket.send(executor.encode({'data': 'hello'}))
+
+    queue = MaxSizeSkipDeque(max_size=current_app.max_buffer)
+    key = object()
+    current_app.sse_clients[channel][key] = queue
+
+    # todo: is there a timeout?
+
+    while True:
+        try:
+            async for (data, channel_type, hash_val, data_channel), \
+                    packet in queue:
+                msg_data = {
+                    'data': data,
+                    'packet': packet,
+                    'channel_type': channel_type,
+                    'hash_val': hash_val,
+                    'channel': data_channel,
+                }
+                await websocket.send(executor.encode(msg_data))
+        finally:
+            del current_app.sse_clients[channel][key]
+            if not current_app.sse_clients[channel]:
+                del current_app.sse_clients[channel]
+
+
+async def ws():
+    executor: QuartSocketServer = current_app.socket_executor
+    data = executor.decode_json_buffers(await websocket.receive())
+    channel = data['channel']
+
+    if channel is None:
+        await websocket_handler()
+    else:
+        await websocket_stream_handler(channel)
+
+
 def handle_unexpected_error(error):
     message = [str(x) for x in error.args]
     status_code = 500
@@ -150,8 +257,11 @@ def create_app() -> QuartTrio:
     """Creates the quart app.
     """
     app = QuartTrio(__name__)
-    app.server_executor = QuartRestServer(quart_app=app)
-    app.before_first_request(set_sse_callback)
+    app.rest_executor = QuartRestServer(quart_app=app)
+    app.socket_executor = QuartSocketServer(
+        quart_app=app, registry=app.rest_executor.registry)
+
+    app.before_first_request(app_init)
 
     app.add_url_rule(
         '/api/v1/objects/create_open', view_func=ensure_instance,
@@ -165,6 +275,8 @@ def create_app() -> QuartTrio:
     app.add_url_rule('/api/v1/stream', view_func=sse, methods=['GET'])
     app.add_url_rule(
         '/api/v1/echo_clock', view_func=get_echo_clock, methods=['GET'])
+
+    app.add_websocket('/api/v1/ws', view_func=ws)
 
     # app.register_error_handler(Exception, handle_unexpected_error)
 

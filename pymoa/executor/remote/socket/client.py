@@ -101,7 +101,6 @@ class SocketExecutor(RemoteExecutor):
         await self.write_socket(data, self.socket)
         res = await self.read_decode_json_buffers(self.socket)
         self.raise_return_value(res, packet)
-        return res['data']
 
     async def delete_remote_instance(self, obj: 'RemoteReferenceable'):
         packet = self._packet
@@ -118,7 +117,6 @@ class SocketExecutor(RemoteExecutor):
         self.raise_return_value(res, packet)
 
         self.registry.delete_instance(obj)
-        return res['data']
 
     async def start_executor(self):
         self.socket = await self.open_socket(None)

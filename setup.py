@@ -45,4 +45,8 @@ setup(
         'Bug Reports': URL + '/issues',
         'Source': URL,
     },
+    entry_points={
+        'console_scripts':
+            ['pymoa_quart_app=pymoa.executor.app.quart',
+             'pymoa_multiprocessing_app=pymoa.executor.app.multiprocessing']},
 )

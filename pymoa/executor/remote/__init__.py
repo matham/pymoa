@@ -457,8 +457,8 @@ class InstanceRegistry:
         var_msg_len = sum(lengths) + len(json_bytes) + len(buffers) * 4
 
         header = struct.pack(
-            '4!I', 0xc33f0f68, var_msg_len, len(json_bytes), len(lengths))
-        encoded_lengths = struct.pack(f'{len(lengths)}!I', *lengths)
+            '!4I', 0xc33f0f68, var_msg_len, len(json_bytes), len(lengths))
+        encoded_lengths = struct.pack(f'!{len(lengths)}I', *lengths)
 
         return b''.join([header, json_bytes, encoded_lengths] + buffers)
 
