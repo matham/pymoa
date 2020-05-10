@@ -58,10 +58,7 @@ class RestServer(RemoteExecutorServer):
         obj, data = await self._create_instance(data)
 
         if self.stream_objects:
-            channel = f'{hash_val}.ensure'
-            data['channel'] = channel
-            data['channel_type'] = 'ensure'
-            self.post_sse_channel(data, channel, 'ensure')
+            self.post_sse_channel(data, 'ensure', hash_val)
 
     @apply_executor
     async def delete_instance(self, data: str) -> None:
@@ -71,10 +68,7 @@ class RestServer(RemoteExecutorServer):
         obj, data = await self._delete_instance(data)
 
         if self.stream_objects:
-            channel = f'{hash_val}.delete'
-            data['channel'] = channel
-            data['channel_type'] = 'delete'
-            self.post_sse_channel(data, channel, 'delete')
+            self.post_sse_channel(data, 'delete', hash_val)
 
     @apply_executor
     async def execute(self, data: str) -> str:
@@ -84,19 +78,16 @@ class RestServer(RemoteExecutorServer):
         res, data = await self._execute(data)
 
         if self.stream_objects:
-            channel = f'{hash_val}.execute'
-            data['channel'] = channel
-            data['channel_type'] = 'execute'
-            self.post_sse_channel(data, channel, 'execute')
+            self.post_sse_channel(data, 'execute', hash_val)
 
         return self.encode(res)
 
-    def post_sse_channel(self, data, channel, channel_type):
+    def post_sse_channel(self, data, channel, hash_val):
         """Needs to be able to handle cross-thread requests.
 
         :param data:
         :param channel:
-        :param channel_type:
+        :param hash_val:
         :return:
         """
         raise NotImplementedError
@@ -131,8 +122,4 @@ class SSELogger(RemoteDataLogger):
 
     def log_item(self, obj, props=None, trigger_name=None, trigger_value=None):
         data = self._get_log_item_data(obj, props, trigger_name, trigger_value)
-        channel = f'{obj.hash_val}.data'
-        data['channel'] = channel
-        data['channel_type'] = 'data'
-
-        self.sse_post_callback(data, channel, 'data')
+        self.sse_post_callback(data, 'data', obj.hash_val)

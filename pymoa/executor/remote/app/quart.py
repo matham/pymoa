@@ -29,21 +29,27 @@ class QuartRestServer(RestServer):
         super(QuartRestServer, self).__init__(**kwargs)
         self.quart_app = quart_app
 
-    def post_sse_channel(self, data, channel, channel_type):
+    def post_sse_channel(self, data, channel_type, hash_val):
+        channel = f'{hash_val}.{channel_type}'
         data = self.encode(data)
 
         queues = self.quart_app.sse_clients[channel] \
             if channel in self.quart_app.sse_clients else {}
         queues2 = self.quart_app.sse_clients[channel_type] \
             if channel_type in self.quart_app.sse_clients else {}
-        queues3 = self.quart_app.sse_clients[''] \
+        queues3 = self.quart_app.sse_clients[hash_val] \
+            if hash_val in self.quart_app.sse_clients else {}
+        queues4 = self.quart_app.sse_clients[''] \
             if '' in self.quart_app.sse_clients else {}
 
         queue: MaxSizeSkipDeque
         for queue in chain(
-                queues.values(), queues2.values(), queues3.values()):
+                queues.values(), queues2.values(), queues3.values(),
+                queues4.values()):
             try:
-                queue.add_item((data, channel), len(data) + len(channel))
+                queue.add_item(
+                    (data, channel_type, hash_val, channel),
+                    len(data) + len(channel) * 2 - 1)
             except Full:
                 pass
 
@@ -102,8 +108,10 @@ async def sse():
             message = f"data: {data}\n\n"
             yield message.encode('utf-8')
 
-            async for (data, data_channel), packet in queue:
-                id_data = json.dumps((packet, data_channel))
+            async for (data, channel_type, hash_val, data_channel), \
+                    packet in queue:
+                id_data = json.dumps(
+                    (packet, channel_type, hash_val, data_channel))
                 message = f"data: {data}\nid: {id_data}\n\n"
                 yield message.encode('utf-8')
         finally:
