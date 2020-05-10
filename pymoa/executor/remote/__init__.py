@@ -374,17 +374,19 @@ class InstanceRegistry:
     def register_json_coder(
             cls, name: str, class_to_register: type, encoder: Callable,
             decoder: Callable):
-        cls.json_coders[f'@{name}'] = class_to_register, encoder, decoder
+        cls.json_coders[f'__@@{name}'] = class_to_register, encoder, decoder
 
-    def referenceable_json_decoder(self, dct: dict):
+    def referenceable_json_decoder(self, dct: dict, buffers: list = None):
         if len(dct) != 1:
             return dct
 
         (name, value), = dct.items()
-        if '@remote_object' == name:
+        if '__@@remote_object' == name:
             return self.hashed_instances[value]
-        if '@base64' == name:
+        if '__@@base64' == name:
             return base64.standard_b64decode(value)
+        if '__@@buff' == name:
+            return buffers[value]
 
         json_coders = self.json_coders
         if name in json_coders:
@@ -392,17 +394,42 @@ class InstanceRegistry:
             return decoder(value)
         return dct
 
-    def decode_json(self, data: str, default: Any = None):
-        if data:
-            return json.loads(data, object_hook=self.referenceable_json_decoder)
-        return default
+    def decode_json(self, data: str):
+        return json.loads(data, object_hook=self.referenceable_json_decoder)
 
-    def encode_json_func(self, obj):
+    def decode_json_buffers_header(self, header: bytes):
+        magic, msg_len, json_bytes, num_buffers = struct.unpack('4!I', header)
+        if magic != 0xc33f0f68:
+            raise ValueError(f'Stream corrupted. Magic number {magic} '
+                             f'doe not match 0xc33f0f68')
+        return msg_len, json_bytes, num_buffers
+
+    def decode_json_buffers(
+            self, data: bytes, json_bytes: int, num_buffers: int):
+        json_msg = data[:json_bytes].decode('utf8')
+        buffer_lengths = struct.unpack(
+            f'{num_buffers}!I',
+            data[json_bytes: json_bytes + num_buffers * 4]
+        )
+        buff_flat = data[json_bytes + num_buffers * 4:]
+
+        indices = accumulate(buffer_lengths, initial=0)
+        buffers = [buff_flat[s:e] for s, e in zip(indices[:-1], indices[1:])]
+
+        decoder = partial(self.referenceable_json_decoder, buffers=buffers)
+        return json.loads(json_msg, object_hook=decoder)
+
+    def encode_json_func(self, obj, buffers: list = None):
         if isinstance(obj, RemoteReferenceable):
-            return {'@remote_object': obj.hash_val}
+            return {'__@@remote_object': obj.hash_val}
         if isinstance(obj, (bytes, bytearray)):
-            data = base64.standard_b64encode(obj).decode('ascii')
-            return {'@base64': data}
+            if buffers is None:
+                data = base64.standard_b64encode(obj).decode('ascii')
+                return {'__@@base64': data}
+
+            i = len(buffers)
+            buffers.append(obj)
+            return {'__@@buff': i}
 
         for name, (cls, encoder, _) in self.json_coders.items():
             if isinstance(obj, cls):
@@ -411,8 +438,29 @@ class InstanceRegistry:
         raise TypeError(f'Object of type {obj.__class__.__name__} '
                         f'is not JSON serializable')
 
-    def encode_json(self, obj):
+    def encode_json(self, obj) -> str:
         return json.dumps(obj, default=self.encode_json_func)
+
+    def prepare_json_buffers(self, obj) -> Tuple[bytes, List[bytes]]:
+        buffers = []
+        s = json.dumps(
+            obj, default=partial(self.encode_json_func, buffers=buffers))
+        return s.encode('utf8'), buffers
+
+    def encode_json_buffers(self, obj) -> bytes:
+        """Message is: magic number, size of dynamic message, size of json,
+        number of buffers, json, list of size for each buffer, buffers.
+        """
+        json_bytes, buffers = self.prepare_json_buffers(obj)
+
+        lengths = list(map(len, buffers))
+        var_msg_len = sum(lengths) + len(json_bytes) + len(buffers) * 4
+
+        header = struct.pack(
+            '4!I', 0xc33f0f68, var_msg_len, len(json_bytes), len(lengths))
+        encoded_lengths = struct.pack(f'{len(lengths)}!I', *lengths)
+
+        return b''.join([header, json_bytes, encoded_lengths] + buffers)
 
 
 class RemoteRegistry(InstanceRegistry):
