@@ -398,7 +398,7 @@ class InstanceRegistry:
         return json.loads(data, object_hook=self.referenceable_json_decoder)
 
     def decode_json_buffers_header(self, header: bytes):
-        magic, msg_len, json_bytes, num_buffers = struct.unpack('4!I', header)
+        magic, msg_len, json_bytes, num_buffers = struct.unpack('!4I', header)
         if magic != 0xc33f0f68:
             raise ValueError(f'Stream corrupted. Magic number {magic} '
                              f'doe not match 0xc33f0f68')
@@ -408,12 +408,12 @@ class InstanceRegistry:
             self, data: bytes, json_bytes: int, num_buffers: int):
         json_msg = data[:json_bytes].decode('utf8')
         buffer_lengths = struct.unpack(
-            f'{num_buffers}!I',
+            f'!{num_buffers}I',
             data[json_bytes: json_bytes + num_buffers * 4]
         )
         buff_flat = data[json_bytes + num_buffers * 4:]
 
-        indices = accumulate(buffer_lengths, initial=0)
+        indices = [0] + list(accumulate(buffer_lengths))
         buffers = [buff_flat[s:e] for s, e in zip(indices[:-1], indices[1:])]
 
         decoder = partial(self.referenceable_json_decoder, buffers=buffers)
