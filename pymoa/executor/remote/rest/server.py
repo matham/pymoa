@@ -19,8 +19,6 @@ class RestServer(RemoteExecutorServer):
 
     executor: AsyncThreadExecutor = None
 
-    to_quart_thread_portal: TrioPortal = None
-
     def __init__(
             self, exec_requests_in_executor=False, stream_objects=True,
             stream_data_logs=True, **kwargs):
@@ -42,7 +40,6 @@ class RestServer(RemoteExecutorServer):
 
     async def start_executor(self):
         if self.executor:
-            self.to_quart_thread_portal = TrioPortal()
             await self.executor.start_executor()
 
     async def stop_executor(self, block=True):
@@ -117,7 +114,7 @@ class RestServer(RemoteExecutorServer):
 
     async def get_echo_clock(self, data: str) -> str:
         data = self.decode(data)
-        data = await self._get_clock_data(data)
+        data = self._get_clock_data(data)
         return self.encode(data)
 
 

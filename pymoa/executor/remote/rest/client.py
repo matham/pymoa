@@ -7,6 +7,7 @@ import uuid
 from asks import Session
 from asks.errors import BadStatus
 import time
+from trio import TASK_STATUS_IGNORED
 import trio
 
 from pymoa.executor.remote.rest import SSEStream
@@ -123,58 +124,67 @@ class RestExecutor(RemoteExecutor):
         config = await self.get_remote_object_info(obj, 'config')
         self._apply_config_from_remote(obj, config)
 
-    async def generate_sse_events(self, response):
+    async def generate_sse_events(self, response, task_status):
+        decode = self.decode
         last_packet = None
-        async for _, data, id_, _ in SSEStream.stream(response):
-            data = self.decode(data)
-            if data == 'alive':
-                continue
+        async with response.body() as response_body:
+            task_status.started()
+            async for _, data, id_, _ in SSEStream.stream(response_body):
+                data = decode(data)
+                if data == 'alive':
+                    continue
 
-            packet, data_channel = self.decode(id_)
-            if last_packet is not None and last_packet + 1 != packet:
-                raise ValueError(
-                    f'Packets were skipped {last_packet} -> {packet}')
-            last_packet = packet
+                packet, *_ = decode(id_)
+                if last_packet is not None and last_packet + 1 != packet:
+                    raise ValueError(
+                        f'Packets were skipped {last_packet} -> {packet}')
+                last_packet = packet
 
-            yield data
+                yield data
 
-    async def apply_data_from_remote(self, obj):
+    async def apply_data_from_remote(
+            self, obj, task_status=TASK_STATUS_IGNORED):
         params = {'channel': f'{obj.hash_val}.data'}
         uri = f'{self.uri}/api/v1/stream'
         response = await self.session.get(uri, params=params, stream=True)
         raise_for_status(response)
 
         await self._apply_data_from_remote(
-            obj, self.generate_sse_events(response))
+            obj, self.generate_sse_events(response, task_status))
 
-    async def get_data_from_remote(self, obj) -> AsyncGenerator:
+    async def get_data_from_remote(
+            self, obj, task_status=TASK_STATUS_IGNORED) -> AsyncGenerator:
         params = {'channel': f'{obj.hash_val}.data'}
         uri = f'{self.uri}/api/v1/stream'
         response = await self.session.get(uri, params=params, stream=True)
         raise_for_status(response)
 
-        return self.generate_sse_events(response)
+        async for value in self.generate_sse_events(response, task_status):
+            yield value
 
-    async def apply_execute_from_remote(self, obj, exclude_self=True):
+    async def apply_execute_from_remote(
+            self, obj, exclude_self=True, task_status=TASK_STATUS_IGNORED):
         params = {'channel': f'{obj.hash_val}.execute'}
         uri = f'{self.uri}/api/v1/stream'
         response = await self.session.get(uri, params=params, stream=True)
         raise_for_status(response)
 
         await self._apply_execute_from_remote(
-            obj, self.generate_sse_events(response), exclude_self)
+            obj, self.generate_sse_events(response, task_status), exclude_self)
 
-    async def get_execute_from_remote(self, obj) -> AsyncGenerator:
+    async def get_execute_from_remote(
+            self, obj, task_status=TASK_STATUS_IGNORED) -> AsyncGenerator:
         params = {'channel': f'{obj.hash_val}.execute'}
         uri = f'{self.uri}/api/v1/stream'
         response = await self.session.get(uri, params=params, stream=True)
         raise_for_status(response)
 
-        return self.generate_sse_events(response)
+        async for value in self.generate_sse_events(response, task_status):
+            yield value
 
     async def get_echo_clock(self) -> Tuple[int, int, int]:
         start_time = time.perf_counter_ns()
-        data = await self._get_clock_data()
+        data = self._get_clock_data()
         data = self.encode(data)
 
         uri = f'{self.uri}/api/v1/echo_clock'

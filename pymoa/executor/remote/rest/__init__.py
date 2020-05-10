@@ -70,7 +70,7 @@ class SSEStream:
 
     @classmethod
     async def stream(
-            cls, response: StreamResponse
+            cls, response_body
     ) -> AsyncGenerator[Tuple[Optional[str], Optional[str], Optional[str],
                               Optional[int]], None]:
         newlines = b'\r\n', b'\r', b'\n'
@@ -85,7 +85,7 @@ class SSEStream:
         # we only place stuff here once the line of the field is done
         event = {'event': None, 'data': [], 'id': None, 'retry': None}
 
-        async for chunk in response.body():
+        async for chunk in response_body:
             for line in chunk.splitlines(True):
                 if not line.endswith(newlines):
                     # in the middle of line

@@ -18,23 +18,23 @@ async def test_run_in_quart_executor(
 
     data = {}
     exec_data = {}
-    exec_gen = await quart_executor.get_execute_from_remote(quart_device)
-    data_gen = await quart_executor.get_data_from_remote(quart_device)
 
-    async def read_exec_gen():
+    async def read_exec_gen(task_status=trio.TASK_STATUS_IGNORED):
         nonlocal exec_data
-        async for exec_data in exec_gen:
+        async for exec_data in quart_executor.get_execute_from_remote(
+                quart_device, task_status):
             break
 
-    async def read_data_gen():
+    async def read_data_gen(task_status=trio.TASK_STATUS_IGNORED):
         nonlocal data
-        async for data in data_gen:
+        async for data in quart_executor.get_data_from_remote(
+                quart_device, task_status):
             break
 
     async with trio.open_nursery() as nursery:
+        await nursery.start(read_data_gen)
+        await nursery.start(read_exec_gen)
         nursery.start_soon(quart_device.read_state)
-        nursery.start_soon(read_data_gen)
-        nursery.start_soon(read_exec_gen)
 
     assert quart_device.state is not None
     assert count == 1

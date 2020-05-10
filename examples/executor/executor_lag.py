@@ -2,7 +2,7 @@
 import trio
 import time
 
-from pymoa.executor.remote.rest.quart_app import create_app
+from pymoa.executor.remote.app.quart import create_app
 from pymoa.executor.remote.rest.client import RestExecutor
 from pymoa.executor.threading import ThreadExecutor, AsyncThreadExecutor
 from pymoa.executor.remote.dummy import DummyRemoteExecutor

@@ -4,7 +4,7 @@ import trio
 
 @pytest.fixture
 async def quart_app(nursery):
-    from pymoa.executor.remote.rest.quart_app import create_app
+    from pymoa.executor.remote.app.quart import create_app
     app = create_app()
     nursery.start_soon(app.run_task)
     await trio.sleep(.01)

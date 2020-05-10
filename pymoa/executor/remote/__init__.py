@@ -6,10 +6,16 @@ register device classes with the InstanceRegistry so that it could be created
 remotely.
 
 """
-from typing import Dict, List, Any, Callable, Tuple, Set, AsyncGenerator
+from typing import Dict, List, Any, Callable, Tuple, Set, AsyncGenerator, \
+    Iterable
 import json
+from trio import TASK_STATUS_IGNORED
 import base64
 import hashlib
+import uuid
+import struct
+from itertools import accumulate
+from functools import partial
 import time
 
 from pymoa.data_logger import Loggable, ObjectLogger
@@ -50,16 +56,20 @@ class RemoteExecutorBase(Executor):
     async def apply_config_from_remote(self, obj):
         raise NotImplementedError
 
-    async def apply_data_from_remote(self, obj):
+    async def apply_data_from_remote(
+            self, obj, task_status=TASK_STATUS_IGNORED):
         raise NotImplementedError
 
-    async def get_data_from_remote(self, obj):
+    async def get_data_from_remote(
+            self, obj, task_status=TASK_STATUS_IGNORED):
         raise NotImplementedError
 
-    async def apply_execute_from_remote(self, obj, exclude_self=True):
+    async def apply_execute_from_remote(
+            self, obj, exclude_self=True, task_status=TASK_STATUS_IGNORED):
         raise NotImplementedError
 
-    async def get_execute_from_remote(self, obj) -> AsyncGenerator:
+    async def get_execute_from_remote(
+            self, obj, task_status=TASK_STATUS_IGNORED) -> AsyncGenerator:
         raise NotImplementedError
 
     def encode(self, data):
@@ -81,6 +91,7 @@ class RemoteExecutor(RemoteExecutorBase):
         if registry is None:
             registry = LocalRegistry()
         self.registry = registry
+        self._uuid = uuid.uuid4().bytes
 
     def encode(self, data):
         return self.registry.encode_json(data)
@@ -171,7 +182,7 @@ class RemoteExecutor(RemoteExecutorBase):
 
             self.call_execute_callback(obj, return_value, callback)
 
-    async def _get_clock_data(self) -> dict:
+    def _get_clock_data(self) -> dict:
         return {}
 
 
@@ -299,7 +310,7 @@ class RemoteExecutorServer(RemoteExecutorServerBase):
 
         return data
 
-    async def _get_clock_data(self, data: dict) -> dict:
+    def _get_clock_data(self, data: dict) -> dict:
         return {'server_time': time.perf_counter_ns()}
 
 
