@@ -66,17 +66,13 @@ async def test_pump_channel(nursery: trio.Nursery):
         nonlocal count
         count += 1
     device.fbind('on_data_update', callback)
-    nursery.start_soon(device.pump_state)
 
     assert device.name == 'rand_device'
     assert device.state is None
+
+    nursery.start_soon(device.pump_state, 10)
+
     await trio.sleep(.1)
 
     assert device.state is not None
     assert count >= 1
-    timestamp = device.timestamp
-    await trio.sleep(.3)
-
-    await device.read_state()
-    assert device.timestamp > timestamp
-    assert count >= 2

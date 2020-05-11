@@ -181,10 +181,10 @@ class MaxSizeSkipDeque:
         self.size -= size
         return item, packet
 
-    def add_item(self, item, size=1):
-        if self.max_size and self.size + size > self.max_size:
+    def add_item(self, item, size=1, force=False):
+        if not force and self.max_size and self.size + size > self.max_size:
             self.packet += 1
-            raise Full
+            return
 
         self.size += size
         self.packet += 1

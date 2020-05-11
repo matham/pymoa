@@ -12,7 +12,7 @@ from typing import Optional, Iterable, Dict
 from kivy.properties import ObjectProperty
 
 from pymoa.device.port import Channel, Port
-from pymoa.executor import apply_executor
+from pymoa.executor import apply_executor, apply_generator_executor
 
 __all__ = (
     'DigitalChannel', 'DigitalPort', 'RandomDigitalChannel',
@@ -101,10 +101,15 @@ class RandomDigitalChannel(DigitalChannel):
     async def write_state(self, state: bool, **kwargs):
         await self.set_state_value(state)
 
-    async def pump_state(self):
-        while True:
-            await self.get_state_value()
-            await trio.sleep(.2)
+    @apply_generator_executor(callback=executor_callback)
+    def generate_data(self, num_samples):
+        for _ in range(num_samples):
+            yield random.random() >= 0.5, time.perf_counter()
+
+    async def pump_state(self, num_samples):
+        async with self.generate_data(num_samples) as aiter:
+            async for item in aiter:
+                pass
 
 
 class RandomDigitalPort(DigitalPort):
@@ -141,7 +146,13 @@ class RandomDigitalPort(DigitalPort):
     async def write_states(self, **kwargs: Dict[str, bool]):
         await self.set_channels_value(kwargs)
 
-    async def pump_state(self):
-        while True:
-            await self.get_channels_value()
-            await trio.sleep(.2)
+    @apply_generator_executor(callback=executor_callback)
+    def generate_data(self, num_samples):
+        for _ in range(num_samples):
+            yield [random.random() >= 0.5 for _ in self.channel_names], \
+               time.perf_counter()
+
+    async def pump_state(self, num_samples):
+        async with self.generate_data(num_samples) as aiter:
+            async for item in aiter:
+                pass

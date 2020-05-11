@@ -2,7 +2,7 @@
 =============
 """
 
-from typing import Tuple
+from typing import Tuple, AsyncGenerator
 import threading
 import math
 import queue as stdlib_queue
@@ -10,6 +10,7 @@ import trio
 import outcome
 import time
 import logging
+from pymoa.utils import MaxSizeSkipDeque
 
 
 from pymoa.executor import Executor, NO_CALLBACK
@@ -31,6 +32,8 @@ class ThreadExecutor(Executor):
     eof = object()
 
     limiter: trio.CapacityLimiter = None
+
+    max_queue_size = 100
 
     def __init__(self, name='ThreadExecutor', **kwargs):
         super(ThreadExecutor, self).__init__(**kwargs)
@@ -69,8 +72,9 @@ class ThreadExecutor(Executor):
         # work and then schedule the calls to report_back_in_trio_thread_fn
         eof = self.eof
         while True:
-            obj, sync_fn, args, kwargs, task, token = queue.get(
-                block=True)
+            obj, sync_fn, args, kwargs, task, token, gen_queue, gen_do_eof = \
+                queue.get(block=True)
+
             if obj is eof:
                 try:
                     token.run_sync_soon(trio.hazmat.reschedule, task)
@@ -78,14 +82,37 @@ class ThreadExecutor(Executor):
                     pass
                 return
 
-            result = outcome.capture(sync_fn, obj, *args, **kwargs)
-            try:
-                token.run_sync_soon(trio.hazmat.reschedule, task, result)
-            except trio.RunFinishedError:
-                # The entire run finished, so our particular tasks are
-                # certainly long gone - it must have cancelled. Continue
-                # eating the queue.
-                pass
+            if gen_queue is None:
+                result = outcome.capture(sync_fn, obj, *args, **kwargs)
+                try:
+                    token.run_sync_soon(trio.hazmat.reschedule, task, result)
+                except trio.RunFinishedError:
+                    # The entire run finished, so our particular tasks are
+                    # certainly long gone - it must have cancelled. Continue
+                    # eating the queue.
+                    pass
+            else:
+                add_item = gen_queue.add_item
+                result = outcome.capture(sync_fn, obj, *args, **kwargs)
+                # todo: implement back-pressure
+                try:
+                    if isinstance(result, outcome.Error):
+                        token.run_sync_soon(add_item, result, 1, True)
+                        continue
+
+                    gen = result.unwrap()
+                    while gen_do_eof[0] is not eof:
+                        result = outcome.capture(next, gen)
+                        if isinstance(result, outcome.Error):
+                            if isinstance(result.error, StopIteration):
+                                result = None
+
+                            token.run_sync_soon(add_item, result, 1, True)
+                            break
+
+                        token.run_sync_soon(add_item, result, 1)
+                except trio.RunFinishedError:
+                    pass
 
     @trio.hazmat.enable_ki_protection
     async def execute(self, obj, sync_fn, args=(), kwargs=None, callback=None):
@@ -94,7 +121,7 @@ class ThreadExecutor(Executor):
             await trio.hazmat.checkpoint_if_cancelled()
             self._exec_queue.put(
                 (obj, sync_fn, args, kwargs or {}, trio.hazmat.current_task(),
-                 trio.hazmat.current_trio_token()))
+                 trio.hazmat.current_trio_token(), None, None))
 
             def abort(raise_cancel):
                 # cannot be canceled
@@ -104,6 +131,39 @@ class ThreadExecutor(Executor):
             if callback is not NO_CALLBACK:
                 self.call_execute_callback(obj, res, callback)
         return res
+
+    async def execute_generator(
+            self, obj, sync_gen, args=(), kwargs=None, callback=None
+    ) -> AsyncGenerator:
+        queue = MaxSizeSkipDeque(max_size=self.max_queue_size)
+        callback = self.get_execute_callback_func(obj, callback)
+        call_callback = self.call_execute_callback_func
+        last_packet = None
+        do_eof = [None]
+        token = trio.hazmat.current_trio_token()
+
+        async with self.limiter:
+            await trio.hazmat.checkpoint_if_cancelled()
+
+            self._exec_queue.put(
+                (obj, sync_gen, args, kwargs or {}, None, token, queue, do_eof))
+
+            try:
+                async for result, packet in queue:
+                    if result is None:
+                        return
+
+                    result = result.unwrap()
+
+                    if last_packet is not None and last_packet + 1 != packet:
+                        raise ValueError(
+                            f'Packets were skipped {last_packet} -> {packet}')
+                    last_packet = packet
+
+                    call_callback(result, callback)
+                    yield result
+            finally:
+                do_eof[0] = self.eof
 
     async def get_echo_clock(self) -> Tuple[int, int, int]:
         def get_time(*args):

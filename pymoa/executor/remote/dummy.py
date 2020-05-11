@@ -127,7 +127,9 @@ class DummyRemoteExecutor(RemoteExecutor):
     async def get_data_from_remote(self, obj):
         raise NotImplementedError
 
-    async def apply_execute_from_remote(self, obj, exclude_self=True):
+    async def apply_execute_from_remote(
+            self, obj, exclude_self=True,
+            task_status=trio.TASK_STATUS_IGNORED):
         raise NotImplementedError
 
     @contextlib.asynccontextmanager

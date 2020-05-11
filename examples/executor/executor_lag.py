@@ -109,17 +109,22 @@ async def measure_cls_lag(cls):
             await device.read_state()
         rate = 100 * 1e9 / (time.perf_counter_ns() - ts)
 
+        ts = time.perf_counter_ns()
+        await device.pump_state(100)
+        rate_cont = 100 * 1e9 / (time.perf_counter_ns() - ts)
+
         if hasattr(executor, 'ensure_remote_instance'):
             await executor.delete_remote_instance(device)
     else:
-        rate = 0
+        rate_cont = rate = 0
 
     await executor.stop_executor(block=True)
 
     request = sum(requests) / len(requests)
     response = sum(responses) / len(responses)
     print(f'{cls.__name__}; Request lag: {request:.2f}ms. '
-          f'Response lag: {response:.2f}ms. Rate: {rate:.2f}Hz')
+          f'Response lag: {response:.2f}ms. Rate: {rate:.2f}Hz. '
+          f'Continuous rate: {rate_cont:.2f}Hz')
 
 
 async def measure_no_executor_lag():
@@ -130,7 +135,12 @@ async def measure_no_executor_lag():
         await device.read_state()
     rate = 100 * 1e9 / (time.perf_counter_ns() - ts)
 
-    print(f'No executor; Rate: {rate:.2f}Hz')
+    ts = time.perf_counter_ns()
+    await device.pump_state(100)
+    rate_cont = 100 * 1e9 / (time.perf_counter_ns() - ts)
+
+    print(f'No executor; Rate: {rate:.2f}Hz. '
+          f'Continuous rate: {rate_cont:.2f}Hz')
 
 
 if __name__ == '__main__':

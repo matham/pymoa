@@ -5,12 +5,11 @@ ADC implementation of :class:`~pymoa.device.Device`.
 """
 
 from time import perf_counter, sleep
-import trio
 
 from kivy.properties import ObjectProperty
 
 from pymoa.device import Device
-from pymoa.executor import apply_executor
+from pymoa.executor import apply_generator_executor
 
 __all__ = ('ADCPort', 'VirtualADCPort')
 
@@ -196,15 +195,11 @@ data_size=2, frequency=4, bit_depth=16)
     defaults to 0.
     '''
 
-    _start_time = None
-
-    _sample = 0
-
     def executor_callback(self, return_value):
         self.timestamp, self.ts_idx, self.raw_data, self.data = return_value
         self.dispatch('on_data_update', self)
 
-    @apply_executor(callback=executor_callback)
+    @apply_generator_executor(callback=executor_callback)
     def generate_data(self, data_size):
         sleep_time = data_size / (self.frequency * 4)
         n = self.num_channels
@@ -213,28 +208,31 @@ data_size=2, frequency=4, bit_depth=16)
         scale = self.scale
         depth = 2 ** self.bit_depth
         freq = self.frequency
-        sample = self._sample
         data_func = self.data_func
 
+        start_time = perf_counter()
+        sample = 0
+
         while True:
-            t = perf_counter()
-            # ensure it's time to generate data_size of data again
-            if int((t - self._start_time) * freq) - sample < data_size:
-                sleep(sleep_time)
-                continue
+            while True:
+                t = perf_counter()
+                # ensure it's time to generate data_size of data again
+                if int((t - start_time) * freq) - sample < data_size:
+                    sleep(sleep_time)
+                    continue
 
-        raw_data = data = [
-            ([data_func(sample + j, k) for j in range(data_size)]
-             if chs[k] else [])
-            for k in range(n)]
+            raw_data = data = [
+                ([data_func(sample + j, k) for j in range(data_size)]
+                 if chs[k] else [])
+                for k in range(n)]
 
-        if depth != 1:
-            raw_data = [
-                [int((val + offset) / scale * depth) for val in d]
-                for d in data]
+            if depth != 1:
+                raw_data = [
+                    [int((val + offset) / scale * depth) for val in d]
+                    for d in data]
 
-        self._sample += data_size
-        return t, [0, ] * n, raw_data, data
+            sample += data_size
+            yield t, [0, ] * n, raw_data, data
 
     def data_func(self, sample, channel):
         """A callback that we call when we need a new data point. The callback
@@ -254,8 +252,6 @@ data_size=2, frequency=4, bit_depth=16)
         return 0
 
     async def pump_state(self, data_size):
-        self._start_time = perf_counter()
-        self._sample = 0
-
-        while True:
-            await self.generate_data(data_size)
+        async with self.generate_data(data_size) as aiter:
+            async for item in aiter:
+                pass

@@ -3,6 +3,7 @@
 
 """
 # todo: investigate compression and no-cache for data
+# todo: implement back-pressure by using task-local variables for sse
 from http import HTTPStatus
 from quart_trio import QuartTrio
 from quart import make_response, request, current_app, jsonify, websocket
@@ -81,10 +82,7 @@ def post_sse_channel(app, data, channel_type, hash_val):
     if sse_queues:
         queue: MaxSizeSkipDeque
         for queue in sse_queues:
-            try:
-                queue.add_item((data, channel_type, hash_val, channel), 1)
-            except Full:
-                pass
+            queue.add_item((data, channel_type, hash_val, channel), 1)
 
 
 async def app_init():

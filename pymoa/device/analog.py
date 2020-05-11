@@ -13,7 +13,7 @@ from typing import Dict
 from kivy.properties import ObjectProperty
 
 from pymoa.device.port import Channel, Port
-from pymoa.executor import apply_executor
+from pymoa.executor import apply_executor, apply_generator_executor
 
 __all__ = (
     'AnalogChannel', 'AnalogPort', 'RandomAnalogChannel', 'RandomAnalogPort')
@@ -97,10 +97,15 @@ class RandomAnalogChannel(AnalogChannel):
     async def write_state(self, state: float, **kwargs):
         await self.set_state_value(state)
 
-    async def pump_state(self):
-        while True:
-            await self.get_state_value()
-            await trio.sleep(.2)
+    @apply_generator_executor(callback=executor_callback)
+    def generate_data(self, num_samples):
+        for _ in range(num_samples):
+            yield random.random(), time.perf_counter()
+
+    async def pump_state(self, num_samples):
+        async with self.generate_data(num_samples) as aiter:
+            async for item in aiter:
+                pass
 
 
 class RandomAnalogPort(AnalogPort):
@@ -137,7 +142,13 @@ class RandomAnalogPort(AnalogPort):
     async def write_states(self, **kwargs: Dict[str, float]):
         await self.set_channels_value(kwargs)
 
-    async def pump_state(self):
-        while True:
-            await self.get_channels_value()
-            await trio.sleep(.2)
+    @apply_generator_executor(callback=executor_callback)
+    def generate_data(self, num_samples):
+        for _ in range(num_samples):
+            yield [random.random() for _ in self.channel_names], \
+               time.perf_counter()
+
+    async def pump_state(self, num_samples):
+        async with self.generate_data(num_samples) as aiter:
+            async for item in aiter:
+                pass

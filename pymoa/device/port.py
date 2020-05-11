@@ -81,7 +81,7 @@ class ChannelBase(Device):
         """
         raise NotImplementedError
 
-    async def pump_state(self):
+    async def pump_state(self, *args, **kwargs):
         raise NotImplementedError
 
 
