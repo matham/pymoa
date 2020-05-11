@@ -26,8 +26,8 @@ class SocketServer(RemoteExecutorServer):
         super(SocketServer, self).__init__(**kwargs)
 
         if exec_requests_in_executor:
-            # post_stream_channel is called from executor thread and not from the
-            # main quart thread. So we need to be able to schedule it to
+            # post_stream_channel is called from executor thread and not from
+            # the main quart thread. So we need to be able to schedule it to
             # execute back in the quart thread. todo: fix this
             self.executor = AsyncThreadExecutor(name='ServerExecutor')
             raise NotImplementedError
