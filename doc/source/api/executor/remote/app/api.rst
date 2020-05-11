@@ -1,10 +1,10 @@
 ########################
-   Rest Executor
+   Remote Apps
 ########################
 
 .. toctree::
    :maxdepth: 2
 
-   rest.rst
-   client.rst
-   server.rst
+   app.rst
+   multiprocessing.rst
+   quart.rst

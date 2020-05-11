@@ -1,10 +1,11 @@
 ########################
-   Rest Executor
+   Socket Executor
 ########################
 
 .. toctree::
    :maxdepth: 2
 
-   rest.rst
+   socket.rst
    client.rst
+   websocket_client.rst
    server.rst

@@ -8,4 +8,6 @@
 
    remote.rst
    rest/api.rst
+   socket/api.rst
+   app/api.rst
    dummy.rst
