@@ -126,7 +126,7 @@ class RestExecutor(RemoteExecutor):
         config = await self.get_remote_object_info(obj, 'config')
         self._apply_config_from_remote(obj, config)
 
-    async def generate_sse_events(self, response, task_status):
+    async def _generate_sse_events(self, response, task_status):
         decode = self.decode
         last_packet = None
         async with response.body() as response_body:
@@ -152,7 +152,7 @@ class RestExecutor(RemoteExecutor):
         raise_for_status(response)
 
         await self._apply_data_from_remote(
-            obj, aclosing(self.generate_sse_events(response, task_status)))
+            obj, aclosing(self._generate_sse_events(response, task_status)))
 
     @contextlib.asynccontextmanager
     async def get_data_from_remote(
@@ -163,7 +163,7 @@ class RestExecutor(RemoteExecutor):
         raise_for_status(response)
 
         async with aclosing(
-                self.generate_sse_events(response, task_status)) as aiter:
+                self._generate_sse_events(response, task_status)) as aiter:
             yield aiter
 
     async def apply_execute_from_remote(
@@ -174,7 +174,7 @@ class RestExecutor(RemoteExecutor):
         raise_for_status(response)
 
         await self._apply_execute_from_remote(
-            obj, aclosing(self.generate_sse_events(response, task_status)),
+            obj, aclosing(self._generate_sse_events(response, task_status)),
             exclude_self)
 
     @contextlib.asynccontextmanager
@@ -186,7 +186,7 @@ class RestExecutor(RemoteExecutor):
         raise_for_status(response)
 
         async with aclosing(
-                self.generate_sse_events(response, task_status)) as aiter:
+                self._generate_sse_events(response, task_status)) as aiter:
             yield aiter
 
     async def get_echo_clock(self) -> Tuple[int, int, int]:

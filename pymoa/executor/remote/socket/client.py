@@ -180,7 +180,7 @@ class SocketExecutor(RemoteExecutor):
         config = await self.get_remote_object_info(obj, 'config')
         self._apply_config_from_remote(obj, config)
 
-    async def generate_stream_events(self, channel, task_status):
+    async def _generate_stream_events(self, channel, task_status):
         read = self.read_decode_json_buffers
         data = self.encode({'channel': channel})
 
@@ -206,27 +206,27 @@ class SocketExecutor(RemoteExecutor):
             self, obj, task_status=TASK_STATUS_IGNORED):
         await self._apply_data_from_remote(
             obj,
-            aclosing(self.generate_stream_events(
+            aclosing(self._generate_stream_events(
                 f'{obj.hash_val}.data', task_status)))
 
     @contextlib.asynccontextmanager
     async def get_data_from_remote(
             self, obj, task_status=TASK_STATUS_IGNORED) -> AsyncGenerator:
-        async with aclosing(self.generate_stream_events(
+        async with aclosing(self._generate_stream_events(
                 f'{obj.hash_val}.data', task_status)) as aiter:
             yield aiter
 
     async def apply_execute_from_remote(
             self, obj, exclude_self=True, task_status=TASK_STATUS_IGNORED):
         await self._apply_execute_from_remote(
-            obj, aclosing(self.generate_stream_events(
+            obj, aclosing(self._generate_stream_events(
                 f'{obj.hash_val}.execute', task_status)),
             exclude_self)
 
     @contextlib.asynccontextmanager
     async def get_execute_from_remote(
             self, obj, task_status=TASK_STATUS_IGNORED) -> AsyncGenerator:
-        async with aclosing(self.generate_stream_events(
+        async with aclosing(self._generate_stream_events(
                 f'{obj.hash_val}.execute', task_status)) as aiter:
             yield aiter
 
