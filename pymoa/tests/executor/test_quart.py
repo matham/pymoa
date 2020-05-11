@@ -1,4 +1,5 @@
 import trio
+from async_generator import aclosing
 import pytest
 from pymoa.device.digital import RandomDigitalChannel
 from pymoa.executor.remote.rest.client import RestExecutor
@@ -31,15 +32,16 @@ async def test_run_in_quart_rest_executor(
 
     async def read_exec_gen(task_status=trio.TASK_STATUS_IGNORED):
         nonlocal exec_data
-        async for exec_data in executor.get_execute_from_remote(
-                device, task_status):
-            break
+        async with executor.get_execute_from_remote(
+                device, task_status) as aiter:
+            async for exec_data in aiter:
+                break
 
     async def read_data_gen(task_status=trio.TASK_STATUS_IGNORED):
         nonlocal data
-        async for data in executor.get_data_from_remote(
-                device, task_status):
-            break
+        async with executor.get_data_from_remote(device, task_status) as aiter:
+            async for data in aiter:
+                break
 
     async with trio.open_nursery() as nursery:
         await nursery.start(read_data_gen)

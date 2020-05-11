@@ -2,7 +2,8 @@
 ===================
 
 """
-from trio_websocket import connect_websocket_url, WebSocketConnection
+from trio_websocket import connect_websocket_url, WebSocketConnection, \
+    open_websocket_url
 from trio import Nursery
 
 from pymoa.executor.remote.socket.client import SocketExecutor
@@ -23,8 +24,12 @@ class WebSocketExecutor(SocketExecutor):
         super(WebSocketExecutor, self).__init__(**kwargs)
         self.nursery = nursery
 
-    async def open_socket(self, channel) -> WebSocketConnection:
-        data = self.encode({'channel': channel})
+    def create_socket_context(self):
+        url = f'ws://{self.server}:{self.port}/api/v1/ws'
+        return open_websocket_url(url)
+
+    async def open_socket(self) -> WebSocketConnection:
+        data = self.encode({'channel': None})
         url = f'ws://{self.server}:{self.port}/api/v1/ws'
         socket = await connect_websocket_url(self.nursery, url)
 

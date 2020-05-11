@@ -8,6 +8,7 @@ remotely.
 """
 from typing import Dict, List, Any, Callable, Tuple, Set, AsyncGenerator, \
     Iterable
+import contextlib
 import json
 from trio import TASK_STATUS_IGNORED
 import base64
@@ -60,6 +61,7 @@ class RemoteExecutorBase(Executor):
             self, obj, task_status=TASK_STATUS_IGNORED):
         raise NotImplementedError
 
+    @contextlib.asynccontextmanager
     async def get_data_from_remote(
             self, obj, task_status=TASK_STATUS_IGNORED):
         raise NotImplementedError
@@ -68,6 +70,7 @@ class RemoteExecutorBase(Executor):
             self, obj, exclude_self=True, task_status=TASK_STATUS_IGNORED):
         raise NotImplementedError
 
+    @contextlib.asynccontextmanager
     async def get_execute_from_remote(
             self, obj, task_status=TASK_STATUS_IGNORED) -> AsyncGenerator:
         raise NotImplementedError

@@ -9,6 +9,8 @@ from asks.errors import BadStatus
 import time
 from trio import TASK_STATUS_IGNORED
 import trio
+from async_generator import aclosing
+import contextlib
 
 from pymoa.executor.remote.rest import SSEStream
 from pymoa.executor.remote import RemoteExecutor, RemoteReferenceable
@@ -150,8 +152,9 @@ class RestExecutor(RemoteExecutor):
         raise_for_status(response)
 
         await self._apply_data_from_remote(
-            obj, self.generate_sse_events(response, task_status))
+            obj, aclosing(self.generate_sse_events(response, task_status)))
 
+    @contextlib.asynccontextmanager
     async def get_data_from_remote(
             self, obj, task_status=TASK_STATUS_IGNORED) -> AsyncGenerator:
         params = {'channel': f'{obj.hash_val}.data'}
@@ -159,8 +162,9 @@ class RestExecutor(RemoteExecutor):
         response = await self.session.get(uri, params=params, stream=True)
         raise_for_status(response)
 
-        async for value in self.generate_sse_events(response, task_status):
-            yield value
+        async with aclosing(
+                self.generate_sse_events(response, task_status)) as aiter:
+            yield aiter
 
     async def apply_execute_from_remote(
             self, obj, exclude_self=True, task_status=TASK_STATUS_IGNORED):
@@ -170,8 +174,10 @@ class RestExecutor(RemoteExecutor):
         raise_for_status(response)
 
         await self._apply_execute_from_remote(
-            obj, self.generate_sse_events(response, task_status), exclude_self)
+            obj, aclosing(self.generate_sse_events(response, task_status)),
+            exclude_self)
 
+    @contextlib.asynccontextmanager
     async def get_execute_from_remote(
             self, obj, task_status=TASK_STATUS_IGNORED) -> AsyncGenerator:
         params = {'channel': f'{obj.hash_val}.execute'}
@@ -179,8 +185,9 @@ class RestExecutor(RemoteExecutor):
         response = await self.session.get(uri, params=params, stream=True)
         raise_for_status(response)
 
-        async for value in self.generate_sse_events(response, task_status):
-            yield value
+        async with aclosing(
+                self.generate_sse_events(response, task_status)) as aiter:
+            yield aiter
 
     async def get_echo_clock(self) -> Tuple[int, int, int]:
         start_time = time.perf_counter_ns()

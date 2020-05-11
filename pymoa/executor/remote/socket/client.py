@@ -4,7 +4,9 @@
 """
 from typing import AsyncGenerator, Tuple
 import time
-from trio import socket, SocketStream, TASK_STATUS_IGNORED
+from async_generator import aclosing
+import contextlib
+from trio import socket, SocketStream, TASK_STATUS_IGNORED, open_tcp_stream
 
 from pymoa.executor.remote import RemoteExecutor, RemoteReferenceable
 from pymoa.executor import NO_CALLBACK
@@ -30,8 +32,11 @@ class SocketExecutor(RemoteExecutor):
         self.server = server
         self.port = port
 
-    async def open_socket(self, channel) -> SocketStream:
-        data = self.encode({'channel': channel})
+    def create_socket_context(self):
+        return open_tcp_stream(self.server, self.port)
+
+    async def open_socket(self) -> SocketStream:
+        data = self.encode({'channel': None})
 
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         server_address = (self.server, self.port)
@@ -119,7 +124,7 @@ class SocketExecutor(RemoteExecutor):
         self.registry.delete_instance(obj)
 
     async def start_executor(self):
-        self.socket = await self.open_socket(None)
+        self.socket = await self.open_socket()
 
     async def stop_executor(self, block=True):
         if self.socket is not None:
@@ -177,11 +182,13 @@ class SocketExecutor(RemoteExecutor):
 
     async def generate_stream_events(self, channel, task_status):
         read = self.read_decode_json_buffers
+        data = self.encode({'channel': channel})
 
-        stream = await self.open_socket(channel)
-        task_status.started()
+        async with self.create_socket_context() as stream:
+            await self.write_socket(data, stream)
+            await read(stream)
+            task_status.started()
 
-        try:
             last_packet = None
             while True:
                 res = await read(stream)
@@ -194,33 +201,34 @@ class SocketExecutor(RemoteExecutor):
                 last_packet = packet
 
                 yield data
-        finally:
-            await stream.aclose()
 
     async def apply_data_from_remote(
             self, obj, task_status=TASK_STATUS_IGNORED):
         await self._apply_data_from_remote(
             obj,
-            self.generate_stream_events(f'{obj.hash_val}.data', task_status))
+            aclosing(self.generate_stream_events(
+                f'{obj.hash_val}.data', task_status)))
 
+    @contextlib.asynccontextmanager
     async def get_data_from_remote(
             self, obj, task_status=TASK_STATUS_IGNORED) -> AsyncGenerator:
-        async for value in self.generate_stream_events(
-                f'{obj.hash_val}.data', task_status):
-            yield value
+        async with aclosing(self.generate_stream_events(
+                f'{obj.hash_val}.data', task_status)) as aiter:
+            yield aiter
 
     async def apply_execute_from_remote(
             self, obj, exclude_self=True, task_status=TASK_STATUS_IGNORED):
         await self._apply_execute_from_remote(
-            obj, self.generate_stream_events(
-                f'{obj.hash_val}.execute', task_status),
+            obj, aclosing(self.generate_stream_events(
+                f'{obj.hash_val}.execute', task_status)),
             exclude_self)
 
+    @contextlib.asynccontextmanager
     async def get_execute_from_remote(
             self, obj, task_status=TASK_STATUS_IGNORED) -> AsyncGenerator:
-        async for value in self.generate_stream_events(
-                f'{obj.hash_val}.execute', task_status):
-            yield value
+        async with aclosing(self.generate_stream_events(
+                f'{obj.hash_val}.execute', task_status)) as aiter:
+            yield aiter
 
     async def get_echo_clock(self) -> Tuple[int, int, int]:
         packet = self._packet

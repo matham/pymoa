@@ -5,6 +5,7 @@
 from typing import Set, Tuple
 import time
 import trio
+import contextlib
 
 from pymoa.executor.remote import RemoteExecutor, RemoteRegistry, \
     RemoteReferenceable, LocalRegistry
@@ -122,11 +123,13 @@ class DummyRemoteExecutor(RemoteExecutor):
     async def apply_data_from_remote(self, obj):
         raise NotImplementedError
 
+    @contextlib.asynccontextmanager
     async def get_data_from_remote(self, obj):
         raise NotImplementedError
 
     async def apply_execute_from_remote(self, obj, exclude_self=True):
         raise NotImplementedError
 
+    @contextlib.asynccontextmanager
     async def get_execute_from_remote(self, obj):
         raise NotImplementedError

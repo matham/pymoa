@@ -36,7 +36,9 @@ setup(
         'dev': [
             'pytest>=3.6', 'pytest-cov', 'flake8', 'sphinx-rtd-theme',
             'coveralls', 'pytest-trio', 'sphinxcontrib-trio'],
-        'network': ['quart', 'quart-trio', 'asks', 'trio-websocket'],
+        'network': [
+            'quart', 'quart-trio', 'asks', 'trio-websocket',
+            'async_generator'],
     },
     package_data={
         'pymoa':
