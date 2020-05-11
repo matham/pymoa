@@ -16,25 +16,17 @@ async def quart_app(nursery):
 @pytest.fixture
 async def quart_rest_executor(quart_app):
     from pymoa.executor.remote.rest.client import RestExecutor
-    executor = RestExecutor(uri='http://127.0.0.1:5000')
-    await executor.start_executor()
+    async with RestExecutor(uri='http://127.0.0.1:5000') as executor:
 
-    yield executor
-
-    await executor.stop_executor(block=True)
+        yield executor
 
 
 @pytest.fixture
 async def quart_socket_executor(quart_app, nursery):
     from pymoa.executor.remote.socket.websocket_client import WebSocketExecutor
-    # async with trio.open_nursery() as nursery:
-    executor = WebSocketExecutor(
-        nursery=nursery, server='127.0.0.1', port=5000)
-    await executor.start_executor()
-
-    yield executor
-
-    await executor.stop_executor(block=True)
+    async with WebSocketExecutor(
+            nursery=nursery, server='127.0.0.1', port=5000) as executor:
+        yield executor
 
 
 @pytest.fixture

@@ -47,6 +47,13 @@ class Executor:
     async def get_echo_clock(self) -> Tuple[int, int, int]:
         raise NotImplementedError
 
+    async def __aenter__(self):
+        await self.start_executor()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        await self.stop_executor()
+
 
 def apply_executor(func=None, callback=None):
     """Decorator that calls the method using the executor.
