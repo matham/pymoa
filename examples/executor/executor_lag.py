@@ -57,13 +57,13 @@ async def measure_within_process_quart_lag(cls):
           f'Continuous rate: {rate_cont:.2f}Hz')
 
 
-async def measure_outside_process_quart_lag(cls):
+async def measure_outside_process_quart_lag(cls, host='127.0.0.1', port=5000):
     async with trio.open_nursery() as socket_nursery:
         if cls is RestExecutor:
-            executor = RestExecutor(uri='http://127.0.0.1:5000')
+            executor = RestExecutor(uri=f'http://{host}:{port}')
         else:
             executor = WebSocketExecutor(
-                nursery=socket_nursery, server='127.0.0.1', port=5000)
+                nursery=socket_nursery, server=host, port=port)
 
         device = RandomAnalogChannel(executor=executor)
         responses = []
@@ -152,10 +152,18 @@ async def measure_no_executor_lag():
 
 
 if __name__ == '__main__':
+    import argparse
+    parser = argparse.ArgumentParser(description='PyMoa performance tester.')
+    parser.add_argument(
+        '--host', dest='host', action='store', default="127.0.0.1")
+    parser.add_argument(
+        '--port', dest='port', action='store', default=5000, type=int)
+    args = parser.parse_args()
+
     for cls in (RestExecutor, WebSocketExecutor):
         trio.run(measure_within_process_quart_lag, cls)
         # only run if quart app is serving externally
-        trio.run(measure_outside_process_quart_lag, cls)
+        trio.run(measure_outside_process_quart_lag, cls, args.host, args.port)
 
     for cls in (ThreadExecutor, AsyncThreadExecutor, DummyRemoteExecutor):
         trio.run(measure_cls_lag, cls)

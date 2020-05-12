@@ -325,8 +325,15 @@ def create_app() -> QuartTrio:
 
 
 def run_app():
-    create_app().run()
+    parser = argparse.ArgumentParser(description='PyMoa basic server.')
+    parser.add_argument(
+        '--host', dest='host', action='store', default="127.0.0.1")
+    parser.add_argument(
+        '--port', dest='port', action='store', default=5000, type=int)
+
+    args = parser.parse_args()
+    create_app().run(args.host, args.port)
 
 
 if __name__ == '__main__':
-    create_app().run()
+    run_app()
