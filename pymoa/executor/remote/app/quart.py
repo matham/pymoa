@@ -8,6 +8,7 @@ from http import HTTPStatus
 from quart_trio import QuartTrio
 from quart import make_response, request, current_app, jsonify, websocket
 from collections import defaultdict
+from async_generator import aclosing
 from itertools import chain
 import json
 from queue import Full
@@ -86,9 +87,6 @@ def post_sse_channel(app, data, channel_type, hash_val):
 
 
 async def app_init():
-    await current_app.rest_executor.start_executor()
-    await current_app.socket_executor.start_executor()
-
     current_app.sse_clients = defaultdict(dict)
     current_app.max_buffer = MAX_QUEUE_SIZE
 
@@ -175,12 +173,26 @@ async def websocket_handler():
         packet = msg['packet']
         data = msg['data']
 
+        ret_data = {
+            'cmd': cmd,
+            'packet': packet,
+        }
+
         if cmd == 'ensure_remote_instance':
             res = await executor.ensure_instance(data)
         elif cmd == 'delete_remote_instance':
             res = await executor.delete_instance(data)
         elif cmd == 'execute':
             res = await executor.execute(data)
+        elif cmd == 'execute_generator':
+            ret_data['done_execute'] = False
+            async with aclosing(executor.execute_generator(data)) as aiter:
+                async for item in aiter:
+                    ret_data['data'] = item
+                    await websocket.send(executor.encode(ret_data))
+
+            res = None
+            ret_data['done_execute'] = True
         elif cmd == 'get_remote_object_info':
             res = await executor.get_object_info(data)
         elif cmd == 'get_echo_clock':
@@ -188,12 +200,7 @@ async def websocket_handler():
         else:
             raise Exception(f'Unknown command "{cmd}"')
 
-        ret_data = {
-            'data': res,
-            'cmd': cmd,
-            'packet': packet,
-        }
-
+        ret_data['data'] = res
         await websocket.send(executor.encode(ret_data))
 
 
@@ -279,6 +286,10 @@ def create_app() -> QuartTrio:
     # app.register_error_handler(Exception, handle_unexpected_error)
 
     return app
+
+
+def run_app():
+    create_app().run()
 
 
 if __name__ == '__main__':

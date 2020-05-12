@@ -41,6 +41,9 @@ async def measure_within_process_quart_lag(cls):
                     await device.read_state()
                 te = time.perf_counter_ns()
 
+                await device.pump_state(100)
+                rate_cont = 100 * 1e9 / (time.perf_counter_ns() - te)
+
                 await executor.delete_remote_instance(device)
                 await executor.stop_executor(block=True)
 
@@ -50,7 +53,8 @@ async def measure_within_process_quart_lag(cls):
     response = sum(responses) / len(responses)
     print(f'Quart-internal - {cls.__name__}; Request lag: {request:.2f}ms. '
           f'Response lag: {response:.2f}ms. '
-          f'Rate: {100 * 1e9 / (te - ts):.2f}Hz')
+          f'Rate: {100 * 1e9 / (te - ts):.2f}Hz. '
+          f'Continuous rate: {rate_cont:.2f}Hz')
 
 
 async def measure_outside_process_quart_lag(cls):
@@ -76,6 +80,9 @@ async def measure_outside_process_quart_lag(cls):
         for _ in range(100):
             await device.read_state()
         te = time.perf_counter_ns()
+
+        await device.pump_state(100)
+        rate_cont = 100 * 1e9 / (time.perf_counter_ns() - te)
         await executor.delete_remote_instance(device)
 
         await executor.stop_executor(block=True)
@@ -83,7 +90,8 @@ async def measure_outside_process_quart_lag(cls):
     response = sum(responses) / len(responses)
     print(f'Quart-external - {cls.__name__}; '
           f'Round-trip lag: {response:.2f}ms. '
-          f'Rate: {100 * 1e9 / (te - ts):.2f}Hz')
+          f'Rate: {100 * 1e9 / (te - ts):.2f}Hz. '
+          f'Continuous rate: {rate_cont:.2f}Hz')
 
 
 async def measure_cls_lag(cls):

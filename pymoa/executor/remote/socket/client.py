@@ -84,6 +84,7 @@ class SocketExecutor(RemoteExecutor):
         return self.registry.decode_json_buffers(data, json_bytes, num_buffers)
 
     def raise_return_value(self, data: dict, packet: int = None):
+        # todo: implement reading errors when server fails
         if packet is not None:
             packet_ = data['packet']
             if packet_ != packet:
@@ -132,6 +133,7 @@ class SocketExecutor(RemoteExecutor):
             self.socket = None
 
     async def execute(self, obj, sync_fn, args=(), kwargs=None, callback=None):
+        # todo: add limiter
         packet = self._packet
         self._packet += 1
         data = {
@@ -150,6 +152,42 @@ class SocketExecutor(RemoteExecutor):
         if callback is not NO_CALLBACK:
             self.call_execute_callback(obj, ret_val, callback)
         return ret_val
+
+    async def execute_generator(
+            self, obj, sync_gen, args=(), kwargs=None, callback=None
+    ) -> AsyncGenerator:
+        # todo: implement some kind of error recovery of reopening socket
+        read = self.read_decode_json_buffers
+        write = self.write_socket
+        raise_return_value = self.raise_return_value
+        callback = self.get_execute_callback_func(obj, callback)
+        call_callback = self.call_execute_callback_func
+
+        packet = self._packet
+        self._packet += 1
+        data = {
+            'data': self._get_execute_data(
+                obj, sync_gen, args, kwargs, callback),
+            'cmd': 'execute_generator',
+            'packet': packet,
+        }
+        data = self.encode(data)
+
+        header = self.encode({'channel': None})
+        async with self.create_socket_context() as sock:
+            await write(header, sock)
+            await read(sock)
+
+            await write(data, sock)
+            while True:
+                res = await read(sock)
+                raise_return_value(res, packet)
+
+                if res['done_execute']:
+                    return
+                ret_val = res['data']
+                call_callback(ret_val, callback)
+                yield ret_val
 
     async def get_remote_object_info(self, obj, query):
         """

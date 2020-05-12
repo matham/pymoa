@@ -6,6 +6,7 @@ from typing import Tuple, AsyncGenerator
 import threading
 import math
 import queue as stdlib_queue
+from queue import Empty
 import trio
 import outcome
 import time
@@ -33,7 +34,7 @@ class ThreadExecutor(Executor):
 
     limiter: trio.CapacityLimiter = None
 
-    max_queue_size = 100
+    max_queue_size = 10
 
     def __init__(self, name='ThreadExecutor', **kwargs):
         super(ThreadExecutor, self).__init__(**kwargs)
@@ -92,12 +93,25 @@ class ThreadExecutor(Executor):
                     # eating the queue.
                     pass
             else:
-                add_item = gen_queue.add_item
+                send_channel, std_queue = gen_queue
+
+                def send_nowait():
+                    try:
+                        send_channel.send_nowait(None)
+                    except trio.WouldBlock:
+                        pass
+
+                put = std_queue.put
+                # we send to queue followed by ping on memory channel. We
+                # cannot deadlock, because the ping will result in removing at
+                # least one item, ensuring there will always be at least one
+                # item space free eventually, so put will only block for a
+                # short time until then. And then put will ping again
                 result = outcome.capture(sync_fn, obj, *args, **kwargs)
-                # todo: implement back-pressure
                 try:
                     if isinstance(result, outcome.Error):
-                        token.run_sync_soon(add_item, result, 1, True)
+                        put(result, block=True)
+                        token.run_sync_soon(send_nowait)
                         continue
 
                     gen = result.unwrap()
@@ -107,10 +121,12 @@ class ThreadExecutor(Executor):
                             if isinstance(result.error, StopIteration):
                                 result = None
 
-                            token.run_sync_soon(add_item, result, 1, True)
+                            put(result, block=True)
+                            token.run_sync_soon(send_nowait)
                             break
 
-                        token.run_sync_soon(add_item, result, 1)
+                        put(result, block=True)
+                        token.run_sync_soon(send_nowait)
                 except trio.RunFinishedError:
                     pass
 
@@ -135,10 +151,11 @@ class ThreadExecutor(Executor):
     async def execute_generator(
             self, obj, sync_gen, args=(), kwargs=None, callback=None
     ) -> AsyncGenerator:
-        queue = MaxSizeSkipDeque(max_size=self.max_queue_size)
+        send_channel, receive_channel = trio.open_memory_channel(1)
+        # we use this queue for back-pressure
+        queue = stdlib_queue.Queue(maxsize=max(self.max_queue_size, 2))
         callback = self.get_execute_callback_func(obj, callback)
         call_callback = self.call_execute_callback_func
-        last_packet = None
         do_eof = [None]
         token = trio.hazmat.current_trio_token()
 
@@ -146,24 +163,30 @@ class ThreadExecutor(Executor):
             await trio.hazmat.checkpoint_if_cancelled()
 
             self._exec_queue.put(
-                (obj, sync_gen, args, kwargs or {}, None, token, queue, do_eof))
+                (obj, sync_gen, args, kwargs or {}, None, token,
+                 (send_channel, queue), do_eof))
 
             try:
-                async for result, packet in queue:
-                    if result is None:
-                        return
+                async for _ in receive_channel:
+                    while True:
+                        try:
+                            result = queue.get(block=False)
+                        except Empty:
+                            break
+                        if result is None:
+                            return
 
-                    result = result.unwrap()
+                        result = result.unwrap()
 
-                    if last_packet is not None and last_packet + 1 != packet:
-                        raise ValueError(
-                            f'Packets were skipped {last_packet} -> {packet}')
-                    last_packet = packet
-
-                    call_callback(result, callback)
-                    yield result
+                        call_callback(result, callback)
+                        yield result
             finally:
                 do_eof[0] = self.eof
+                while True:
+                    try:
+                        queue.get(block=False)
+                    except Empty:
+                        break
 
     async def get_echo_clock(self) -> Tuple[int, int, int]:
         def get_time(*args):
@@ -260,6 +283,11 @@ class AsyncThreadExecutor(Executor):
             if callback is not NO_CALLBACK:
                 self.call_execute_callback(obj, res, callback)
         return res
+
+    async def execute_generator(
+            self, obj, sync_gen, args=(), kwargs=None, callback=None
+    ) -> AsyncGenerator:
+        raise NotImplementedError
 
     async def get_echo_clock(self) -> Tuple[int, int, int]:
         async def get_time(*args):

@@ -75,4 +75,4 @@ async def test_pump_channel(nursery: trio.Nursery):
     await trio.sleep(.1)
 
     assert device.state is not None
-    assert count >= 1
+    assert count == 10

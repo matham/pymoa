@@ -4,8 +4,7 @@
 """
 
 from pymoa.executor.remote import RemoteExecutorServer, RemoteDataLogger
-from pymoa.executor.threading import AsyncThreadExecutor
-from pymoa.executor import apply_executor
+from async_generator import aclosing
 
 __all__ = ('SocketServer', 'StreamLogger')
 
@@ -18,19 +17,8 @@ class SocketServer(RemoteExecutorServer):
 
     stream_data_logs = True
 
-    executor: AsyncThreadExecutor = None
-
-    def __init__(
-            self, exec_requests_in_executor=False, stream_objects=True,
-            stream_data_logs=True, **kwargs):
+    def __init__(self, stream_objects=True, stream_data_logs=True, **kwargs):
         super(SocketServer, self).__init__(**kwargs)
-
-        if exec_requests_in_executor:
-            # post_stream_channel is called from executor thread and not from
-            # the main quart thread. So we need to be able to schedule it to
-            # execute back in the quart thread. todo: fix this
-            self.executor = AsyncThreadExecutor(name='ServerExecutor')
-            raise NotImplementedError
 
         self.stream_objects = stream_objects
         self.stream_data_logs = stream_data_logs
@@ -45,15 +33,6 @@ class SocketServer(RemoteExecutorServer):
     async def decode(self, data):
         raise NotImplementedError
 
-    async def start_executor(self):
-        if self.executor:
-            await self.executor.start_executor()
-
-    async def stop_executor(self, block=True):
-        if self.executor:
-            await self.executor.stop_executor(block=block)
-
-    @apply_executor
     async def ensure_instance(self, data: dict) -> None:
         registry = self.registry
         hash_val = data['hash_val']
@@ -63,9 +42,9 @@ class SocketServer(RemoteExecutorServer):
         obj, data = await self._create_instance(data)
 
         if self.stream_objects:
+            # todo: document the channels and ensure all remotes send them
             self.post_stream_channel(data, 'ensure', hash_val)
 
-    @apply_executor
     async def delete_instance(self, data: dict) -> None:
         hash_val = data['hash_val']
         obj, data = await self._delete_instance(data)
@@ -73,7 +52,6 @@ class SocketServer(RemoteExecutorServer):
         if self.stream_objects:
             self.post_stream_channel(data, 'delete', hash_val)
 
-    @apply_executor
     async def execute(self, data: dict):
         hash_val = data['hash_val']
         res, data = await self._execute(data)
@@ -82,6 +60,16 @@ class SocketServer(RemoteExecutorServer):
             self.post_stream_channel(data, 'execute', hash_val)
 
         return res
+
+    async def execute_generator(self, data: dict):
+        # todo: limit to one socket both executes and object creation
+        hash_val = data['hash_val']
+        async with aclosing(self._execute_generator(data)) as aiter:
+            async for res, data in aiter:
+                yield res
+
+                if self.stream_objects:
+                    self.post_stream_channel(data, 'execute', hash_val)
 
     def post_stream_channel(self, data, channel, hash_val):
         """Needs to be able to handle cross-thread requests.
@@ -93,7 +81,6 @@ class SocketServer(RemoteExecutorServer):
         """
         raise NotImplementedError
 
-    @apply_executor
     async def get_object_info(self, data: dict):
         """Can be one of config or data.
 

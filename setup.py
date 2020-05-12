@@ -49,9 +49,9 @@ setup(
     },
     entry_points={
         'console_scripts':
-            ['pymoa_quart_app=pymoa.executor.remote.app.quart',
+            ['pymoa_quart_app=pymoa.executor.remote.app.quart:run_app',
              'pymoa_multiprocessing_app=pymoa.executor.remote.'
-             'app.multiprocessing',
+             'app.multiprocessing:run_app',
              ]
     },
 )

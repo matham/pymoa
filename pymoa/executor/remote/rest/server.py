@@ -3,8 +3,6 @@
 
 """
 from pymoa.executor.remote import RemoteExecutorServer, RemoteDataLogger
-from pymoa.executor.threading import AsyncThreadExecutor, TrioPortal
-from pymoa.executor import apply_executor
 
 __all__ = ('RestServer', 'SSELogger')
 
@@ -17,19 +15,8 @@ class RestServer(RemoteExecutorServer):
 
     stream_data_logs = True
 
-    executor: AsyncThreadExecutor = None
-
-    def __init__(
-            self, exec_requests_in_executor=False, stream_objects=True,
-            stream_data_logs=True, **kwargs):
+    def __init__(self, stream_objects=True, stream_data_logs=True, **kwargs):
         super(RestServer, self).__init__(**kwargs)
-
-        if exec_requests_in_executor:
-            # post_sse_channel is called from executor thread and not from the
-            # main quart thread. So we need to be able to schedule it to
-            # execute back in the quart thread. todo: fix this
-            self.executor = AsyncThreadExecutor(name='ServerExecutor')
-            raise NotImplementedError
 
         self.stream_objects = stream_objects
         self.stream_data_logs = stream_data_logs
@@ -38,15 +25,6 @@ class RestServer(RemoteExecutorServer):
             self.stream_data_logger = SSELogger(
                 sse_post_callback=self.post_sse_channel)
 
-    async def start_executor(self):
-        if self.executor:
-            await self.executor.start_executor()
-
-    async def stop_executor(self, block=True):
-        if self.executor:
-            await self.executor.stop_executor(block=block)
-
-    @apply_executor
     async def ensure_instance(self, data: str) -> None:
         registry = self.registry
         data = self.decode(data)
@@ -60,7 +38,6 @@ class RestServer(RemoteExecutorServer):
         if self.stream_objects:
             self.post_sse_channel(data, 'ensure', hash_val)
 
-    @apply_executor
     async def delete_instance(self, data: str) -> None:
         data = self.decode(data)
         hash_val = data['hash_val']
@@ -70,7 +47,6 @@ class RestServer(RemoteExecutorServer):
         if self.stream_objects:
             self.post_sse_channel(data, 'delete', hash_val)
 
-    @apply_executor
     async def execute(self, data: str) -> str:
         data = self.decode(data)
         hash_val = data['hash_val']
@@ -92,7 +68,6 @@ class RestServer(RemoteExecutorServer):
         """
         raise NotImplementedError
 
-    @apply_executor
     async def get_object_info(self, data: str) -> str:
         """Can be one of config or data.
 

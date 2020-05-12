@@ -15,6 +15,7 @@ import base64
 import hashlib
 import uuid
 import struct
+from async_generator import aclosing
 from itertools import accumulate
 from functools import partial
 import time
@@ -275,11 +276,11 @@ class RemoteExecutorServer(RemoteExecutorServerBase):
 
         return obj, data
 
-    async def _execute(self, data: dict) -> (Any, dict):
+    async def _execute(self, data: dict) -> Tuple[Any, dict]:
         hash_val = data['hash_val']
         method_name = data['method_name']
-        args = data['args']
-        kwargs = data['kwargs']
+        args = data.pop('args')
+        kwargs = data.pop('kwargs')
         callback = data['callback']
 
         res = await self.registry.call_instance_method(
@@ -287,6 +288,19 @@ class RemoteExecutorServer(RemoteExecutorServerBase):
         data['return_value'] = res
 
         return res, data
+
+    async def _execute_generator(self, data: dict):
+        hash_val = data['hash_val']
+        method_name = data['method_name']
+        args = data.pop('args')
+        kwargs = data.pop('kwargs')
+        callback = data['callback']
+
+        async with self.registry.call_instance_method_gen(
+                hash_val, method_name, args, kwargs) as aiter:
+            async for res in aiter:
+                data['return_value'] = res
+                yield res, data
 
     async def _get_object_info_data(self, data: dict) -> dict:
         """
@@ -488,6 +502,12 @@ class RemoteRegistry(InstanceRegistry):
     ) -> Any:
         func = getattr(self.hashed_instances[obj_hash], method_name)
         return await func(*args, **kwargs)
+
+    def call_instance_method_gen(
+            self, obj_hash: str, method_name: str, args: tuple, kwargs: dict
+    ) -> Any:
+        func = getattr(self.hashed_instances[obj_hash], method_name)
+        return func(*args, **kwargs)
 
 
 class LocalRegistry(InstanceRegistry):
