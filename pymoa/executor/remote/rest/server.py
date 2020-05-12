@@ -2,6 +2,7 @@
 =========
 
 """
+from async_generator import aclosing
 from pymoa.executor.remote import RemoteExecutorServer, RemoteDataLogger
 
 __all__ = ('RestServer', 'SSELogger')
@@ -57,6 +58,16 @@ class RestServer(RemoteExecutorServer):
             self.post_sse_channel(data, 'execute', hash_val)
 
         return self.encode(res)
+
+    async def execute_generator(self, data: str):
+        data = self.decode(data)
+        hash_val = data['hash_val']
+        async with aclosing(self._execute_generator(data)) as aiter:
+            async for res, data in aiter:
+                yield res
+
+                if self.stream_objects:
+                    self.post_sse_channel(data, 'execute', hash_val)
 
     def post_sse_channel(self, data, channel, hash_val):
         """Needs to be able to handle cross-thread requests.

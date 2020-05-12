@@ -102,6 +102,39 @@ class RestExecutor(RemoteExecutor):
                 self.call_execute_callback(obj, res, callback)
         return res
 
+    async def execute_generator(
+            self, obj, gen, args=(), kwargs=None, callback=None,
+            task_status=TASK_STATUS_IGNORED
+    ) -> AsyncGenerator:
+        decode = self.decode
+
+        data = self._get_execute_data(obj, gen, args, kwargs, callback)
+        data = self.encode(data)
+
+        uri = f'{self.uri}/api/v1/objects/execute_generator/stream'
+        callback = self.get_execute_callback_func(obj, callback)
+        call_callback = self.call_execute_callback_func
+        async with self.limiter:
+            response = await self.session.post(
+                uri, data=data, headers={'Content-Type': 'application/json'},
+                stream=True)
+            raise_for_status(response)
+
+            async with response.body() as response_body:
+                task_status.started()
+                async for _, data, id_, _ in SSEStream.stream(response_body):
+                    data = decode(data)
+                    if data == 'alive':
+                        continue
+
+                    done_execute = decode(id_)
+                    if done_execute:
+                        return
+
+                    return_value = data['return_value']
+                    call_callback(return_value, callback)
+                    yield return_value
+
     async def get_remote_object_info(self, obj, query):
         """
 
@@ -152,7 +185,7 @@ class RestExecutor(RemoteExecutor):
         raise_for_status(response)
 
         await self._apply_data_from_remote(
-            obj, aclosing(self._generate_sse_events(response, task_status)))
+            obj, self._generate_sse_events(response, task_status))
 
     @contextlib.asynccontextmanager
     async def get_data_from_remote(
@@ -174,7 +207,7 @@ class RestExecutor(RemoteExecutor):
         raise_for_status(response)
 
         await self._apply_execute_from_remote(
-            obj, aclosing(self._generate_sse_events(response, task_status)),
+            obj, self._generate_sse_events(response, task_status),
             exclude_self)
 
     @contextlib.asynccontextmanager

@@ -155,36 +155,38 @@ class RemoteExecutor(RemoteExecutorBase):
             setattr(obj, key, value)
 
     async def _apply_data_from_remote(self, obj, gen):
-        async for data in gen:
-            trigger_name = data['logged_trigger_name']
-            trigger_value = data['logged_trigger_value']
-            props = data['logged_items']
+        async with aclosing(gen) as aiter:
+            async for data in aiter:
+                trigger_name = data['logged_trigger_name']
+                trigger_value = data['logged_trigger_value']
+                props = data['logged_items']
 
-            for key, value in props.items():
-                if key.startswith('on_'):
-                    obj.dispatch(key, obj, *value)
-                else:
-                    setattr(obj, key, value)
+                for key, value in props.items():
+                    if key.startswith('on_'):
+                        obj.dispatch(key, obj, *value)
+                    else:
+                        setattr(obj, key, value)
 
-            if trigger_name:
-                if trigger_name.startswith('on_'):
-                    obj.dispatch(trigger_name, *trigger_value)
-                else:
-                    setattr(obj, trigger_name, trigger_value)
+                if trigger_name:
+                    if trigger_name.startswith('on_'):
+                        obj.dispatch(trigger_name, *trigger_value)
+                    else:
+                        setattr(obj, trigger_name, trigger_value)
 
     async def _apply_execute_from_remote(self, obj, gen, exclude_self):
         uuid = self._uuid
         if exclude_self and uuid is None:
             raise ValueError('Cannot exclude self when uuid is not set')
 
-        async for data in gen:
-            callback = data['callback']
-            return_value = data['return_value']
+        async with aclosing(gen) as aiter:
+            async for data in aiter:
+                callback = data['callback']
+                return_value = data['return_value']
 
-            if exclude_self and uuid == data['uuid']:
-                continue
+                if exclude_self and uuid == data['uuid']:
+                    continue
 
-            self.call_execute_callback(obj, return_value, callback)
+                self.call_execute_callback(obj, return_value, callback)
 
     def _get_clock_data(self) -> dict:
         return {}

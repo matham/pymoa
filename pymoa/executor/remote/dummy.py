@@ -2,7 +2,7 @@
 ========================
 
 """
-from typing import Set, Tuple
+from typing import Set, Tuple, AsyncGenerator
 import time
 import trio
 import contextlib
@@ -91,6 +91,7 @@ class DummyRemoteExecutor(RemoteExecutor):
         self.limiter = None
 
     async def execute(self, obj, sync_fn, args=(), kwargs=None, callback=None):
+        # todo: actually encode the data
         local_registry = self.local_registry
         hash_val = obj.hash_val
         fn_name = sync_fn.__name__
@@ -104,6 +105,22 @@ class DummyRemoteExecutor(RemoteExecutor):
             if callback is not NO_CALLBACK:
                 self.call_execute_callback(obj, res, callback)
         return res
+
+    async def execute_generator(
+            self, obj, sync_gen, args=(), kwargs=None, callback=None
+    ) -> AsyncGenerator:
+        hash_val = obj.hash_val
+        fn_name = sync_gen.__name__
+
+        async with self.limiter:
+            # pretend we are in the remote side now
+            callback = self.get_execute_callback_func(obj, callback)
+            call_callback = self.call_execute_callback_func
+            async with self.remote_registry.call_instance_method_gen(
+                    hash_val, fn_name, args, kwargs) as aiter:
+                async for res in aiter:
+                    call_callback(res, callback)
+                    yield res
 
     async def get_echo_clock(self) -> Tuple[int, int, int]:
         ts = time.perf_counter_ns()

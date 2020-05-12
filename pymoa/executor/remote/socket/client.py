@@ -244,8 +244,8 @@ class SocketExecutor(RemoteExecutor):
             self, obj, task_status=TASK_STATUS_IGNORED):
         await self._apply_data_from_remote(
             obj,
-            aclosing(self._generate_stream_events(
-                f'{obj.hash_val}.data', task_status)))
+            self._generate_stream_events(
+                f'{obj.hash_val}.data', task_status))
 
     @contextlib.asynccontextmanager
     async def get_data_from_remote(
@@ -257,8 +257,8 @@ class SocketExecutor(RemoteExecutor):
     async def apply_execute_from_remote(
             self, obj, exclude_self=True, task_status=TASK_STATUS_IGNORED):
         await self._apply_execute_from_remote(
-            obj, aclosing(self._generate_stream_events(
-                f'{obj.hash_val}.execute', task_status)),
+            obj, self._generate_stream_events(
+                f'{obj.hash_val}.execute', task_status),
             exclude_self)
 
     @contextlib.asynccontextmanager

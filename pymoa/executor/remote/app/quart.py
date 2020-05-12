@@ -10,8 +10,8 @@ from quart import make_response, request, current_app, jsonify, websocket
 from collections import defaultdict
 from async_generator import aclosing
 from itertools import chain
+import argparse
 import json
-from queue import Full
 
 from pymoa.utils import MaxSizeSkipDeque
 from pymoa.executor.remote.rest.server import RestServer
@@ -108,6 +108,39 @@ async def execute():
     res = await current_app.rest_executor.execute(data)
 
     return await make_response(res, {'Content-Type': 'application/json'})
+
+
+async def execute_generator():
+    executor: QuartRestServer = current_app.rest_executor
+    data = (await request.get_data()).decode('utf8')
+
+    async def send_events():
+        resp_data = json.dumps('alive')
+        message = f"data: {resp_data}\n\n"
+        yield message.encode('utf-8')
+
+        async with aclosing(executor.execute_generator(data)) as aiter:
+            async for item in aiter:
+                resp_data = executor.encode({'return_value': item})
+                id_data = json.dumps(False)
+                message = f"data: {resp_data}\nid: {id_data}\n\n"
+                yield message.encode('utf-8')
+
+        resp_data = executor.encode({})
+        id_data = json.dumps(True)
+        message = f"data: {resp_data}\nid: {id_data}\n\n"
+        yield message.encode('utf-8')
+
+    response = await make_response(
+        send_events(),
+        {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Transfer-Encoding': 'chunked',
+        },
+    )
+    response.timeout = None
+    return response
 
 
 async def get_object_info():
@@ -275,6 +308,9 @@ def create_app() -> QuartTrio:
         '/api/v1/objects/delete', view_func=delete_instance, methods=['POST'])
     app.add_url_rule(
         '/api/v1/objects/execute', view_func=execute, methods=['POST'])
+    app.add_url_rule(
+        '/api/v1/objects/execute_generator/stream',
+        view_func=execute_generator, methods=['POST'])
     app.add_url_rule(
         '/api/v1/objects/object', view_func=get_object_info, methods=['GET'])
     app.add_url_rule('/api/v1/stream', view_func=sse, methods=['GET'])
