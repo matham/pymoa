@@ -7,11 +7,16 @@ import csv
 from os.path import exists
 from typing import Iterable, List, Dict, Any, Tuple
 from itertools import chain
+import logging
+
 from kivy.event import EventDispatcher
+
 from pymoa.utils import get_class_bases
 from pymoa.base import MoaBase
 
-__all__ = ('Loggable', 'ObjectLogger', 'SimpleCSVLogger')
+__all__ = (
+    'Loggable', 'ObjectLogger', 'SimpleCSVLogger', 'SimpleTerminalLogger',
+    'SimpleLoggingLogger')
 
 
 class Loggable(EventDispatcher, MoaBase):
@@ -233,3 +238,65 @@ class SimpleCSVLogger(ObjectLogger):
             writerow(
                 map(str, [i, t, obj_name, name, prop, getattr(obj, prop)]))
         self._count += 1
+
+
+class SimpleTerminalLogger(ObjectLogger):
+    """Concrete implementation of :class:`ObjectLogger` that logs to the
+    terminal by printing.
+    """
+
+    _count = -1
+
+    def print_header(self):
+        if self._count == -1:
+            self.print_item(
+                ['count', 'timestamp', 'name', 'trigger', 'item', 'value'])
+            self._count = 0
+
+    def print_item(self, item):
+        print('\t'.join(map(str, item)))
+
+    def log_property_callback(self, name, obj, value):
+        self.print_header()
+        self.print_item([
+            self._count, time.perf_counter(), obj.name, '', name, value])
+        self._count += 1
+
+    def log_event_callback(self, name, obj, *args):
+        self.print_header()
+        self.print_item([
+            self._count, time.perf_counter(), obj.name, '', name, ''])
+        self._count += 1
+
+    def log_trigger_property_callback(self, name, tracked_props, obj, value):
+        self.print_header()
+        i = self._count
+        t = time.perf_counter()
+        obj_name = obj.name
+
+        for prop in tracked_props:
+            self.print_item([
+                i, t, obj_name, name, prop, getattr(obj, prop)])
+        self._count += 1
+
+    def log_trigger_event_callback(self, name, tracked_props, obj, *args):
+        self.print_header()
+        i = self._count
+        t = time.perf_counter()
+        obj_name = obj.name
+
+        for prop in tracked_props:
+            self.print_item([
+                i, t, obj_name, name, prop, getattr(obj, prop)])
+        self._count += 1
+
+
+class SimpleLoggingLogger(SimpleTerminalLogger):
+    """Concrete implementation of :class:`ObjectLogger` that logs to the
+    python's logging system.
+    """
+
+    log_level = 'warning'
+
+    def print_item(self, item):
+        getattr(logging, self.log_level)('\t'.join(map(str, item)))

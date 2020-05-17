@@ -3,7 +3,7 @@
 
 """
 # todo: investigate compression and no-cache for data
-# todo: implement back-pressure by using task-local variables for sse
+# todo: immediately close connection for sse/stream if full
 from http import HTTPStatus
 from quart_trio import QuartTrio
 from quart import make_response, request, current_app, jsonify, websocket
@@ -174,6 +174,7 @@ async def sse():
 
             async for (data, channel_type, hash_val, data_channel), \
                     packet in queue:
+                # todo: optimize to not encode for each sse
                 data = executor.encode(data)
                 id_data = json.dumps(
                     (packet, channel_type, hash_val, data_channel))
