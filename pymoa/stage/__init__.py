@@ -86,6 +86,7 @@ class MoaStage(Loggable):
 
         async def start_trial_and_signal(
                 trial_num, task_status=trio.TASK_STATUS_IGNORED):
+            self.dispatch('on_trial_start', self, trial_num)
             await self.init_trial(trial_num)
             task_status.started()
             await self.do_trial()
@@ -143,16 +144,19 @@ class MoaStage(Loggable):
                     i, stages, complete_on, complete_on_whom, serial)
             except Exception:
                 await self.trial_done(interrupted=True)
+                self.dispatch('on_trial_end', self, i)
                 raise
             except trio.Cancelled:
                 with trio.move_on_at(math.inf) as cleanup_scope:
                     cleanup_scope.shield = True
                     await self.trial_done(interrupted=True)
+                    self.dispatch('on_trial_end', self, i)
                 raise
 
             with trio.move_on_at(math.inf) as cleanup_scope:
                 cleanup_scope.shield = True
                 await self.trial_done(canceled=canceled)
+                self.dispatch('on_trial_end', self, i)
 
             i += 1
 
@@ -162,12 +166,13 @@ class MoaStage(Loggable):
         self.active = True
 
         try:
-            async with trio.move_on_at(math.inf) as stage_scope:
+            with trio.move_on_at(math.inf) as stage_scope:
                 # save so we can call stop on the stage
                 self.__stage_cancel_scope = stage_scope
                 if max_duration:
                     stage_scope.deadline = trio.current_time() + max_duration
 
+                self.dispatch('on_stage_start', self)
                 await self.init_stage()
                 task_status.started()
 
@@ -175,12 +180,14 @@ class MoaStage(Loggable):
         except Exception:
             normal_exit = False
             await self.stage_done(interrupted=True)
+            self.dispatch('on_stage_end', self)
             raise
         except trio.Cancelled:
             normal_exit = False
             with trio.move_on_at(math.inf) as cleanup_scope:
                 cleanup_scope.shield = True
                 await self.stage_done(interrupted=True)
+                self.dispatch('on_stage_end', self)
             raise
         finally:
             self.__stage_cancel_scope = None
@@ -191,6 +198,7 @@ class MoaStage(Loggable):
             with trio.move_on_at(math.inf) as cleanup_scope:
                 cleanup_scope.shield = True
                 await self.stage_done(canceled=stage_scope.cancelled_caught)
+                self.dispatch('on_stage_end', self)
         finally:
             self.active = False
 
@@ -244,14 +252,20 @@ class MoaStage(Loggable):
     def on_stage_start(self, *largs):
         pass
 
-    def on_trial_start(self, count, *largs):
+    def on_trial_start(self, obj, count, *largs):
         pass
 
-    def on_trial_end(self, count, *largs):
+    def on_trial_end(self, obj, count, *largs):
         pass
 
     def on_stage_end(self, *largs):
         pass
+
+    def iterate_stages(self):
+        yield self
+        for stage in self.stages:
+            for child in stage.iterate_stages():
+                yield child
 
     stages: List['MoaStage'] = ListProperty([])
     '''A list of children :class:`MoaStage` instance. When a stage is started,

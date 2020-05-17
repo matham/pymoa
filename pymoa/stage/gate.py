@@ -35,7 +35,7 @@ class GateStage(MoaStage):
             return perf_counter(), value
 
         # wait in case hold time was not long enough
-        async with trio.move_on_at(math.inf) as cancel_scope:
+        with trio.move_on_at(math.inf) as cancel_scope:
             async for t, new_state in AsyncBindQueue(
                     dev, prop, convert=watch_device, current=True):
                 if new_state == state:
