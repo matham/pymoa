@@ -171,16 +171,25 @@ if __name__ == '__main__':
     trio.run(measure_no_executor_lag)
 
     """
-    Quart-internal - RestExecutor; Request lag: 10.25ms. \
-Response lag: 1.91ms. Rate: 76.47Hz
-    Quart-external - RestExecutor; Round-trip lag: 10.14ms. Rate: 92.82Hz
-    Quart-internal - WebSocketExecutor; Request lag: 0.60ms. \
-Response lag: 0.71ms. Rate: 308.58Hz
-    Quart-external - WebSocketExecutor; Round-trip lag: 1.34ms. Rate: 521.01Hz
-    ThreadExecutor; Request lag: 0.12ms. Response lag: 0.23ms. Rate: 3096.73Hz
-    AsyncThreadExecutor; Request lag: 0.33ms. Response lag: 0.24ms. \
-Rate: 0.00Hz
-    DummyRemoteExecutor; Request lag: 0.04ms. Response lag: 0.01ms. \
-Rate: 23059.01Hz
-    No executor; Rate: 462320.85Hz
+Quart-internal - RestExecutor; Request lag: 10.11ms. Response lag: 1.92ms. \
+Rate: 78.54Hz. Continuous rate: 1067.32Hz
+Quart-external - RestExecutor; Round-trip lag: 8.68ms. Rate: 95.36Hz. \
+Continuous rate: 1495.93Hz
+Quart-internal - WebSocketExecutor; Request lag: 0.63ms. \
+Response lag: 0.75ms. Rate: 324.92Hz. Continuous rate: 795.35Hz
+Quart-external - WebSocketExecutor; Round-trip lag: 2.20ms. \
+Rate: 533.46Hz. Continuous rate: 1104.19Hz
+ThreadExecutor; Request lag: 0.21ms. Response lag: 0.45ms. \
+Rate: 2789.56Hz. Continuous rate: 5395.46Hz
+AsyncThreadExecutor; Request lag: 0.65ms. Response lag: 0.51ms. Rate: 0.00Hz. \
+Continuous rate: 0.00Hz
+DummyRemoteExecutor; Request lag: 0.06ms. Response lag: 0.01ms. \
+Rate: 10327.27Hz. Continuous rate: 5739.54Hz
+No executor; Rate: 246669.96Hz. Continuous rate: 10018.94Hz
+
+When connecting to an external PI, we got:
+Quart-external - RestExecutor; Round-trip lag: 16.56ms. Rate: 59.52Hz. \
+Continuous rate: 847.97Hz
+Quart-external - WebSocketExecutor; Round-trip lag: 6.14ms. Rate: 153.43Hz. \
+Continuous rate: 377.19Hz
     """
