@@ -11,6 +11,17 @@ software devices, loggers that automatically log all stage or device state chang
 that can run arbitrary devices on different threads, process, or even remote servers such as on a Raspberry-pi with
 minimal code changes.
 
+PyMoa re-uses existing libraries where possible. In particular:
+
+* The **amazing** `trio <https://trio.readthedocs.io/en/stable/>`_ library for all concurrency and event loops
+  (running stages, devices, interfacing with threads) and its socket interface (both client and server side).
+* `asks <https://asks.readthedocs.io/en/latest/>`_ for making client side requests over the rest api.
+* `trio-websocket <https://trio-websocket.readthedocs.io/en/stable/>`_ for making client side requests over
+  the websocket api.
+* `Quart <https://pgjones.gitlab.io/quart/>`_ and `quart-trio <https://gitlab.com/pgjones/quart-trio/>`_ for the
+  server-side rest-api and websockets.
+* `Kivy <https://kivy.org/#home>`_ for event and property dispatching in response to data and stage updates.
+
 Framework
 ---------
 
@@ -73,7 +84,7 @@ In real code, this experiment structure would be implemented as:
         motor_device=motor_device, name='sugar pallet stage', delay=0.2))
     trial.add_stage(UniformRandomDelay(min=20, max=40, name='ITI'))
 
-The experiment would then be run using `await root.run_stage()`, which executes all the stages.
+The experiment would then be run using ``await root.run_stage()``, which executes all the stages.
 
 A :class:`~pymoa.stage.MoaStage` will perform an action when each of its trials are run.
 The stage will then :attr:`~pymoa.stage.MoaStage.repeat` the stage's action for each trial. Simultaneously, for each trial,
