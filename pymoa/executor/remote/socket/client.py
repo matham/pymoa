@@ -32,8 +32,16 @@ class SocketExecutor(RemoteExecutor):
         self.server = server
         self.port = port
 
+    @contextlib.asynccontextmanager
+    async def _create_socket_context(self):
+        sock = await open_tcp_stream(self.server, self.port)
+        try:
+            yield sock
+        finally:
+            await sock.aclose()
+
     def create_socket_context(self):
-        return open_tcp_stream(self.server, self.port)
+        return self._create_socket_context()
 
     async def open_socket(self) -> SocketStream:
         data = self.encode({'channel': None})
