@@ -150,7 +150,7 @@ class RandomDigitalPort(DigitalPort):
     def generate_data(self, num_samples):
         for _ in range(num_samples):
             yield [random.random() >= 0.5 for _ in self.channel_names], \
-               time.perf_counter()
+                time.perf_counter()
 
     async def pump_state(self, num_samples):
         async with self.generate_data(num_samples) as aiter:
