@@ -1,0 +1,47 @@
+index,timestamp,name,trigger,item,value
+0,0.6059512,Root stage,on_stage_start,count,-1
+1,0.6065675,Root stage,on_trial_start,count,0
+2,0.6068585,Habituation,on_stage_start,count,-1
+3,0.6071759,Habituation,on_trial_start,count,0
+4,20.6083242,Habituation,on_trial_end,count,0
+5,20.6085545,Habituation,on_stage_end,count,0
+6,20.6087105,Trial,on_stage_start,count,-1
+7,20.6091834,Trial,on_trial_start,count,0
+8,20.60976,photobeam_stage,on_stage_start,count,-1
+9,20.6101662,photobeam_stage,on_trial_start,count,0
+10,20.6122033,photobeam_stage,state,count,0
+11,28.9837687,photobeam_stage,state,count,0
+12,28.9841575,photobeam_stage,on_trial_end,count,0
+13,28.9843255,photobeam_stage,on_stage_end,count,0
+14,28.9844328,sugar pallet stage,on_stage_start,count,-1
+15,28.9847545,sugar pallet stage,on_trial_start,count,0
+16,29.1881972,sugar pallet stage,on_trial_end,count,0
+17,29.1883574,sugar pallet stage,on_stage_end,count,0
+18,29.1884679,ITI,on_stage_start,count,-1
+19,29.1888977,ITI,on_trial_start,count,0
+20,50.6432094,ITI,on_trial_end,count,0
+21,50.6432811,ITI,on_stage_end,count,0
+22,50.6434171,Trial,on_trial_end,count,0
+23,50.6435501,Trial,on_trial_start,count,0
+24,50.6437013,photobeam_stage,on_stage_start,count,0
+25,50.6438246,photobeam_stage,on_trial_start,count,0
+26,50.6439204,photobeam_stage,state,count,0
+27,56.7902294,photobeam_stage,state,count,0
+28,56.790501,photobeam_stage,on_trial_end,count,0
+29,56.79059,photobeam_stage,on_stage_end,count,0
+30,56.7906541,sugar pallet stage,on_stage_start,count,0
+31,56.79086,sugar pallet stage,on_trial_start,count,0
+32,56.9954589,sugar pallet stage,on_trial_end,count,0
+33,56.9956666,sugar pallet stage,on_stage_end,count,0
+34,56.995809,ITI,on_stage_start,count,0
+35,56.9962146,ITI,on_trial_start,count,0
+36,80.2745445,ITI,on_trial_end,count,0
+37,80.2747385,ITI,on_stage_end,count,0
+38,80.2750996,Trial,on_trial_end,count,1
+39,80.2752385,Trial,on_stage_end,count,1
+40,80.2753473,post delay,on_stage_start,count,-1
+41,80.2756924,post delay,on_trial_start,count,0
+42,95.2781586,post delay,on_trial_end,count,0
+43,95.278257,post delay,on_stage_end,count,0
+44,95.2784493,Root stage,on_trial_end,count,0
+45,95.2785226,Root stage,on_stage_end,count,0

@@ -12,10 +12,12 @@ Dependencies
 
 Installing PyMoa
 ---------------------
-After installing the dependencies pymoa can be installed using::
+After installing the dependencies, pymoa can be installed using::
 
     pip install pymoa[network]
 
 to get the last release from pypi, or to get pymoa master for the most current pymoa version do::
 
-    pip install https://github.com/matham/pymoa/archive/master.zip
+    pip install https://github.com/matham/pymoa/archive/master.zip --install-option="--extras-require=network"
+
+This installs all the network dependencies required when pymoa will use remote devices.
