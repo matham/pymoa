@@ -195,7 +195,7 @@ class SimpleCSVLogger(ObjectLogger):
         self._file_descriptor = open(self.filename, mode='w', newline='')
         writer = self._csv_writer = csv.writer(self._file_descriptor)
         writer.writerow(
-            ['count', 'timestamp', 'name', 'trigger', 'item', 'value'])
+            ['index', 'timestamp', 'name', 'trigger', 'item', 'value'])
         self._count = 0
 
     def close_file(self):
@@ -247,14 +247,20 @@ class SimpleTerminalLogger(ObjectLogger):
 
     _count = -1
 
+    separator = ','
+
+    def __init__(self, separator=',', **kwargs):
+        super(SimpleTerminalLogger, self).__init__(**kwargs)
+        self.separator = separator
+
     def print_header(self):
         if self._count == -1:
             self.print_item(
-                ['count', 'timestamp', 'name', 'trigger', 'item', 'value'])
+                ['index', 'timestamp', 'name', 'trigger', 'item', 'value'])
             self._count = 0
 
     def print_item(self, item):
-        print('\t'.join(map(str, item)))
+        print(self.separator.join(map(str, item)))
 
     def log_property_callback(self, name, obj, value):
         self.print_header()
@@ -299,4 +305,4 @@ class SimpleLoggingLogger(SimpleTerminalLogger):
     log_level = 'warning'
 
     def print_item(self, item):
-        getattr(logging, self.log_level)('\t'.join(map(str, item)))
+        getattr(logging, self.log_level)(self.separator.join(map(str, item)))
