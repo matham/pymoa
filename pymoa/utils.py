@@ -5,7 +5,6 @@ Module that provides helpful classes and functions.
 """
 from typing import Optional, Callable
 from collections import deque
-from queue import Full
 import trio
 import math
 
@@ -89,6 +88,10 @@ class AsyncCallbackQueue(object):
 
     _quit: bool = False
 
+    send_channel: trio.MemorySendChannel = None
+
+    receive_channel: trio.MemoryReceiveChannel = None
+
     def __init__(
             self, filter_fn: Optional[Callable] = None,
             convert: Optional[Callable] = None, maxlen: Optional[int] = None,
@@ -98,7 +101,8 @@ class AsyncCallbackQueue(object):
         self.convert = convert
         self.callback_result = deque(maxlen=maxlen)
         self.thread_fn = thread_fn
-        self.event = trio.Event()
+        self.send_channel, self.receive_channel = trio.open_memory_channel(
+            math.inf)
 
     def __del__(self):
         self.stop()
@@ -107,22 +111,18 @@ class AsyncCallbackQueue(object):
         return self
 
     async def __anext__(self):
+        while not self.callback_result:
+            if self._quit:
+                raise StopAsyncIteration
+            await self.receive_channel.receive()
+
         if self._quit:
             raise StopAsyncIteration
 
-        self.event.clear()
-        while not self.callback_result:
-            await self.event.wait()
-            self.event.clear()
-
-        if self.callback_result:
-            return self.callback_result.popleft()
-
-        self.stop()
-        raise StopAsyncIteration
+        return self.callback_result.popleft()
 
     def _thread_reentry(self, *largs, **kwargs):
-        self.event.set()
+        self.send_channel.send_nowait(None)
 
     def callback(self, *args):
         """This (and only this) function may be executed from another thread
@@ -141,7 +141,7 @@ class AsyncCallbackQueue(object):
 
         thread_fn = self.thread_fn
         if thread_fn is None:
-            self.event.set()
+            self.send_channel.send_nowait(None)
         else:
             thread_fn(self._thread_reentry)
 
@@ -149,7 +149,7 @@ class AsyncCallbackQueue(object):
         """Stops the iterator and cleans up.
         """
         self._quit = True
-        self.event.set()
+        self.send_channel.send_nowait(None)
 
 
 class MaxSizeSkipDeque:
