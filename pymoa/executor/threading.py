@@ -78,7 +78,7 @@ class ThreadExecutor(Executor):
 
             if obj is eof:
                 try:
-                    token.run_sync_soon(trio.hazmat.reschedule, task)
+                    token.run_sync_soon(trio.lowlevel.reschedule, task)
                 except trio.RunFinishedError:
                     pass
                 return
@@ -86,7 +86,7 @@ class ThreadExecutor(Executor):
             if gen_queue is None:
                 result = outcome.capture(sync_fn, obj, *args, **kwargs)
                 try:
-                    token.run_sync_soon(trio.hazmat.reschedule, task, result)
+                    token.run_sync_soon(trio.lowlevel.reschedule, task, result)
                 except trio.RunFinishedError:
                     # The entire run finished, so our particular tasks are
                     # certainly long gone - it must have cancelled. Continue
@@ -130,19 +130,19 @@ class ThreadExecutor(Executor):
                 except trio.RunFinishedError:
                     pass
 
-    @trio.hazmat.enable_ki_protection
+    @trio.lowlevel.enable_ki_protection
     async def execute(self, obj, sync_fn, args=(), kwargs=None, callback=None):
         '''It's guaranteed sequential. '''
         async with self.limiter:
-            await trio.hazmat.checkpoint_if_cancelled()
+            await trio.lowlevel.checkpoint_if_cancelled()
             self._exec_queue.put(
-                (obj, sync_fn, args, kwargs or {}, trio.hazmat.current_task(),
-                 trio.hazmat.current_trio_token(), None, None))
+                (obj, sync_fn, args, kwargs or {}, trio.lowlevel.current_task(),
+                 trio.lowlevel.current_trio_token(), None, None))
 
             def abort(raise_cancel):
                 # cannot be canceled
-                return trio.hazmat.Abort.FAILED
-            res = await trio.hazmat.wait_task_rescheduled(abort)
+                return trio.lowlevel.Abort.FAILED
+            res = await trio.lowlevel.wait_task_rescheduled(abort)
 
             if callback is not NO_CALLBACK:
                 self.call_execute_callback(obj, res, callback)
@@ -157,10 +157,10 @@ class ThreadExecutor(Executor):
         callback = self.get_execute_callback_func(obj, callback)
         call_callback = self.call_execute_callback_func
         do_eof = [None]
-        token = trio.hazmat.current_trio_token()
+        token = trio.lowlevel.current_trio_token()
 
         async with self.limiter:
-            await trio.hazmat.checkpoint_if_cancelled()
+            await trio.lowlevel.checkpoint_if_cancelled()
 
             self._exec_queue.put(
                 (obj, sync_gen, args, kwargs or {}, None, token,
@@ -302,51 +302,53 @@ class TrioPortal(object):
     """Portal for communicating with trio from a different thread.
     """
 
+    trio_token: trio.lowlevel.TrioToken = None
+
     def __init__(self, trio_token=None):
         if trio_token is None:
-            trio_token = trio.hazmat.current_trio_token()
-        self._trio_token = trio_token
+            trio_token = trio.lowlevel.current_trio_token()
+        self.trio_token = trio_token
 
     # This is the part that runs in the trio thread
     def _run_cb_async(self, afn, args, task, token):
-        @trio.hazmat.disable_ki_protection
+        @trio.lowlevel.disable_ki_protection
         async def unprotected_afn():
             return await afn(*args)
 
         async def await_in_trio_thread_task():
             result = await outcome.acapture(unprotected_afn)
             try:
-                token.run_sync_soon(trio.hazmat.reschedule, task, result)
+                token.run_sync_soon(trio.lowlevel.reschedule, task, result)
             except trio.RunFinishedError:
                 # The entire run finished, so our particular tasks are certainly
                 # long gone - it must have cancelled.
                 pass
 
-        trio.hazmat.spawn_system_task(await_in_trio_thread_task, name=afn)
+        trio.lowlevel.spawn_system_task(await_in_trio_thread_task, name=afn)
 
     def _run_sync_cb_async(self, fn, args, task, token):
-        @trio.hazmat.disable_ki_protection
+        @trio.lowlevel.disable_ki_protection
         def unprotected_fn():
             return fn(*args)
 
         result = outcome.capture(unprotected_fn)
         try:
-            token.run_sync_soon(trio.hazmat.reschedule, task, result)
+            token.run_sync_soon(trio.lowlevel.reschedule, task, result)
         except trio.RunFinishedError:
             # The entire run finished, so our particular tasks are certainly
             # long gone - it must have cancelled.
             pass
 
-    @trio.hazmat.enable_ki_protection
+    @trio.lowlevel.enable_ki_protection
     async def _do_it_async(self, cb, fn, args):
-        await trio.hazmat.checkpoint_if_cancelled()
-        self._trio_token.run_sync_soon(
-            cb, fn, args, trio.hazmat.current_task(),
-            trio.hazmat.current_trio_token())
+        await trio.lowlevel.checkpoint_if_cancelled()
+        self.trio_token.run_sync_soon(
+            cb, fn, args, trio.lowlevel.current_task(),
+            trio.lowlevel.current_trio_token())
 
         def abort(raise_cancel):
-            return trio.hazmat.Abort.FAILED
-        return await trio.hazmat.wait_task_rescheduled(abort)
+            return trio.lowlevel.Abort.FAILED
+        return await trio.lowlevel.wait_task_rescheduled(abort)
 
     async def run(self, afn, *args):
         return await self._do_it_async(self._run_cb_async, afn, args)
