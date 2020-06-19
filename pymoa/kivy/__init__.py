@@ -3,23 +3,24 @@ import outcome
 import math
 from functools import wraps, partial
 from contextvars import ContextVar
-from contextlib import ExitStack, contextmanager
+from contextlib import contextmanager
 from typing import Optional, Tuple, ContextManager, Generator, Callable
 import time
-from threading import Thread
 from queue import Queue, Empty
+from collections import deque
 from asyncio import iscoroutinefunction
 
 from kivy.clock import ClockBase, ClockNotRunningError, ClockEvent
 
-from pymoa.utils import AsyncCallbackQueue
 from pymoa.executor.threading import TrioPortal
 
 __all__ = (
     'EventLoopStoppedError', 'KivyEventCancelled', 'mark', 'async_run_in_kivy',
     'kivy_run_in_async', 'KivyCallbackEvent',
-    'ContextVarContextManager', 'TrioPortalContextManager',
-    'KivyClockContextManager', 'AsyncBindQueue')
+    'trio_context_manager', 'kivy_context_manager',
+    'get_thread_context_managers', 'ContextVarContextManager',
+    'TrioPortalContextManager', 'KivyClockContextManager',
+    'AsyncKivyEventQueue', 'AsyncKivyBind')
 
 
 class ContextVarContextManager:
@@ -63,6 +64,53 @@ kivy_thread: ContextVar[Optional[ClockBase]] = ContextVar(
 trio_entry: ContextVar[TrioPortal] = ContextVar('trio_entry')
 trio_thread: ContextVar[Optional[TrioPortal]] = ContextVar(
     'trio_thread', default=None)
+
+
+@contextmanager
+def trio_context_manager(clock, queue):
+    portal = TrioPortal()
+    queue.put(portal)
+
+    with KivyClockContextManager(clock):
+        with ContextVarContextManager(trio_thread, portal):
+            yield
+
+
+@contextmanager
+def kivy_context_manager(clock, queue):
+    ts = time.perf_counter()
+    res = None
+    while time.perf_counter() - ts < 1:
+        try:
+            res = queue.get(block=True, timeout=.1)
+        except Empty:
+            pass
+        else:
+            break
+
+    if res is None:
+        raise TimeoutError(
+            "Timed out waiting for trio thread to initialize. If there's only "
+            "on thread, did you enter kivy_context_manager before "
+            "trio_context_manager? With multiple threads, the trio thread "
+            "should be started before entering kivy_context_manager to "
+            "prevent deadlock of the kivy thread")
+
+    with TrioPortalContextManager(res):
+        with ContextVarContextManager(kivy_thread, clock):
+            yield
+
+
+def get_thread_context_managers():
+    """Gets the context managers required to run kivy and trio threads.
+
+    :return: tuple of kivy_context_manager, trio_context_manager
+    """
+    from kivy.clock import Clock
+    queue = Queue(maxsize=1)
+
+    return partial(kivy_context_manager, Clock, queue), \
+        partial(trio_context_manager, Clock, queue)
 
 
 class EventLoopStoppedError(Exception):
@@ -341,7 +389,127 @@ def kivy_run_in_async(func):
     return run_to_yield
 
 
-class AsyncBindQueue(AsyncCallbackQueue):
+class AsyncKivyEventQueue:
+    """A class for asynchronously iterating values in a queue and waiting
+    for the queue to be updated with new values through a callback function.
+
+    An instance is an async iterator which for every iteration waits for
+    callbacks to add values to the queue and then returns it.
+
+    :Parameters:
+
+        `filter`: callable or None
+            A callable that is called with :meth:`callback`'s positional
+            arguments. When provided, if it returns false, this call is dropped.
+        `convert`: callable or None
+            A callable that is called with :meth:`callback`'s positional
+            arguments. It is called immediately as opposed to async.
+            If provided, the return value of convert is returned by
+            the iterator rather than the original value. Helpful
+            for callback values that need to be processed immediately.
+        `max_len`: int or None
+            If None, the callback queue may grow to an arbitrary length.
+            Otherwise, it is bounded to maxlen. Once it's full, when new items
+            are added a corresponding number of oldest items are discarded.
+        `thread_fn`: callable or None
+            If reading from the queue is done with a different thread than
+            writing it, this is the callback that schedules in the read thread.
+    """
+
+    _quit: bool = False
+
+    send_channel: Optional[trio.MemorySendChannel] = None
+
+    receive_channel: [trio.MemoryReceiveChannel] = None
+
+    queue: Optional[deque] = None
+
+    filter: Optional[Callable] = None
+
+    convert: Optional[Callable] = None
+
+    _max_len = None
+
+    def __init__(
+            self, filter_fn: Optional[Callable] = None,
+            convert: Optional[Callable] = None, max_len: Optional[int] = None,
+            **kwargs):
+        super().__init__(**kwargs)
+        self.filter = filter_fn
+        self.convert = convert
+        self._max_len = max_len
+
+    async def __aenter__(self):
+        if self.queue is not None:
+            raise TypeError('Cannot re-enter because it was not properly '
+                            'cleaned up on the last exit')
+
+        self.queue = deque(maxlen=self._max_len)
+        self.send_channel, self.receive_channel = trio.open_memory_channel(1)
+        self._quit = False
+
+        await async_run_in_kivy(self.start_callback)()
+        return self
+
+    async def __aexit__(self, exc_type, exc_val, exc_tb):
+        self._quit = True
+        self.send_channel = self.receive_channel = None
+        await async_run_in_kivy(self.stop_callback)()
+        self.queue = None  # this lets us detect if stop raised an error
+
+    def __aiter__(self):
+        return self
+
+    async def __anext__(self):
+        if self.send_channel is None:
+            raise TypeError('Can only iterate when context was entered')
+
+        while not self.queue:
+            await self.receive_channel.receive()
+
+        return self.queue.popleft()
+
+    def add_item(self, *args):
+        """This (and only this) function may be executed from another thread
+        because the callback may be bound to code executing from an external
+        thread.
+        """
+        f = self.filter
+        if self._quit or f is not None and not f(*args):
+            return
+
+        convert = self.convert
+        if convert is not None:
+            args = convert(*args)
+
+        queue = self.queue
+        if queue is None:
+            return
+        queue.append(args)
+
+        portal = trio_entry.get()
+        if trio_thread.get() is portal:
+            # same thread
+            self._send_on_channel()
+        else:
+            portal.trio_token.run_sync_soon(self._send_on_channel)
+
+    def _send_on_channel(self):
+        send_channel = self.send_channel
+        if send_channel is not None:
+            try:
+                send_channel.send_nowait(None)
+            except trio.WouldBlock:
+                pass
+
+    def start_callback(self):
+        pass
+
+    def stop_callback(self):
+        pass
+
+
+class AsyncKivyBind(AsyncKivyEventQueue):
     """A class for asynchronously observing kivy properties and events.
     Creates an async iterator which for every iteration waits and
     returns the property or event value for every time the property changes
@@ -359,6 +527,7 @@ class AsyncBindQueue(AsyncCallbackQueue):
             Whether the iterator should return the current value on its
             first class (True) or wait for the first event/property dispatch
             before having a value (False). Defaults to True.
+            Only if it's a property and not an event.
     E.g.::
         async for x, y in AsyncBindQueue(
             bound_obj=widget, bound_name='size', convert=lambda x: x[1]):
@@ -376,29 +545,31 @@ class AsyncBindQueue(AsyncCallbackQueue):
 
     bound_uid = 0
 
+    current = True
+
     def __init__(self, bound_obj, bound_name, current=True, **kwargs):
-        super(AsyncBindQueue, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.bound_name = bound_name
         self.bound_obj = bound_obj
+        self.current = current
 
-        uid = self.bound_uid = bound_obj.fbind(bound_name, self.callback)
+    def start_callback(self):
+        super().start_callback()
+        bound_obj = self.bound_obj
+        bound_name = self.bound_name
+
+        uid = self.bound_uid = bound_obj.fbind(bound_name, self.add_item)
         if not uid:
             raise ValueError(
                 '{} is not a recognized property or event of {}'
                 ''.format(bound_name, bound_obj))
 
-        if current and not bound_obj.is_event_type(bound_name):
-            args = bound_obj, getattr(bound_obj, bound_name)
+        if self.current and not bound_obj.is_event_type(bound_name):
+            self.add_item(bound_obj, getattr(bound_obj, bound_name))
 
-            f = self.filter
-            if f is None or f(*args):
-                convert = self.convert
-                if convert is not None:
-                    args = convert(*args)
-                self.callback_result.append(args)
+    def stop_callback(self):
+        super().stop_callback()
 
-    def stop(self):
-        super(AsyncBindQueue, self).stop()
         if self.bound_uid:
             self.bound_obj.unbind_uid(self.bound_name, self.bound_uid)
             self.bound_uid = 0
