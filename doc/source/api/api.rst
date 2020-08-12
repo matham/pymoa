@@ -8,7 +8,6 @@
    pymoa.rst
    stage/api.rst
    device/api.rst
-   executor/api.rst
    base.rst
    data_logger.rst
    utils.rst

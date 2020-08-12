@@ -31,14 +31,11 @@ setup(
         'Programming Language :: Python :: 3.8',
     ],
     packages=find_packages(),
-    install_requires=['kivy', 'trio', 'outcome'],
+    install_requires=['kivy', 'trio', 'pymoa_remote'],
     extras_require={
         'dev': [
             'pytest>=3.6', 'pytest-cov', 'flake8', 'sphinx-rtd-theme',
             'coveralls', 'pytest-trio', 'sphinxcontrib-trio'],
-        'network': [
-            'quart', 'quart-trio', 'asks', 'trio-websocket',
-            'async_generator'],
     },
     package_data={
         'pymoa':
@@ -46,12 +43,5 @@ setup(
     project_urls={
         'Bug Reports': URL + '/issues',
         'Source': URL,
-    },
-    entry_points={
-        'console_scripts':
-            ['pymoa_quart_app=pymoa.executor.remote.app.quart:run_app',
-             'pymoa_multiprocessing_app=pymoa.executor.remote.'
-             'app.multiprocessing:run_app',
-             ]
     },
 )
