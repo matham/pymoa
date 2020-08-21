@@ -2,12 +2,14 @@
 ==========
 
 """
+
 import time
 import csv
 from os.path import exists
-from typing import Iterable, List, Dict, Any, Tuple
-from itertools import chain
+from typing import Iterable, List, Dict, Any, Tuple, Union, Type
 import logging
+from inspect import isclass
+from tree_config.utils import yaml_dumps, yaml_loads
 
 from kivy.event import EventDispatcher
 
@@ -15,69 +17,27 @@ from pymoa.utils import get_class_bases
 from pymoa.base import MoaBase
 
 __all__ = (
-    'Loggable', 'ObjectLogger', 'SimpleCSVLogger', 'SimpleTerminalLogger',
-    'SimpleLoggingLogger')
+    'get_hinted_logged_names', 'ObjectLogger', 'SimpleCSVLogger',
+    'SimpleTerminalLogger', 'SimpleLoggingLogger')
 
 
-class Loggable(EventDispatcher, MoaBase):
-    """Base class for devices that support logging its properties or events.
-    """
+def get_hinted_logged_names(obj_or_cls) -> List[str]:
+    cls = obj_or_cls
+    if not isclass(obj_or_cls):
+        cls = obj_or_cls.__class__
 
-    _logged_names_: Tuple[str] = ()
+    hints = {}
+    for c in [cls] + list(get_class_bases(cls)):
+        for hint in c.__dict__.get('_logged_names_hint_', ()):
+            if hint in hints:
+                continue
 
-    _logged_trigger_names_: Tuple[str] = ()
+            if not hasattr(cls, hint):
+                raise Exception('Missing attribute <{}> in <{}>'.
+                                format(hint, cls.__name__))
+            hints[hint] = None
 
-    _logged_names: List[str] = None
-
-    @property
-    def logged_names(self) -> List[str]:
-        names = self._logged_names
-        if names is None:
-            names = set()
-            cls = self.__class__
-
-            for c in [cls] + list(get_class_bases(cls)):
-                if '_logged_names_' not in c.__dict__:
-                    continue
-
-                for prop in c._logged_names_:
-                    if prop in names:
-                        continue
-
-                    if not hasattr(cls, prop):
-                        raise Exception('Missing attribute <{}> in <{}>'.
-                                        format(prop, cls.__name__))
-                    names.add(prop)
-
-            self._logged_names = names = list(names)
-
-        return names
-
-    _logged_trigger_names: List[str] = None
-
-    @property
-    def logged_trigger_names(self) -> List[str]:
-        names = self._logged_trigger_names
-        if names is None:
-            names = set()
-            cls = self.__class__
-
-            for c in [cls] + list(get_class_bases(cls)):
-                if '_logged_trigger_names_' not in c.__dict__:
-                    continue
-
-                for prop in c._logged_trigger_names_:
-                    if prop in names:
-                        continue
-
-                    if not hasattr(cls, prop):
-                        raise Exception('Missing attribute <{}> in <{}>'.
-                                        format(prop, cls.__name__))
-                    names.add(prop)
-
-            self._logged_trigger_names = names = list(names)
-
-        return names
+    return list(hints)
 
 
 class ObjectLogger:
@@ -85,67 +45,68 @@ class ObjectLogger:
     loggable properties.
     """
 
-    logged_instances: Dict[Loggable, List[Tuple[str, Any]]] = {}
+    logged_instances: Dict[EventDispatcher, List[Tuple[str, Any]]] = {}
 
     def __init__(self, **kwargs):
         super(ObjectLogger, self).__init__(**kwargs)
         self.logged_instances = {}
 
-    def add_logged_instance(
-            self, loggable: Loggable,
-            triggered_names: Iterable[str] = (),
-            logged_names: Iterable[str] = (),
-            use_default_logged_names: bool = True,
-            use_default_logged_trigger_names: bool = True,
+    def add_logged_names(
+            self, obj: EventDispatcher, logged_names: Iterable[str]):
+        """Can't have prop bound as trigger and as name without trigger
+        (causes dups in SSELogger).
+
+        :param obj:
+        :param logged_names:
+        """
+        if obj in self.logged_instances:
+            uids = self.logged_instances[obj]
+        else:
+            uids = self.logged_instances[obj] = []
+        add_uid = uids.append
+
+        fbind = obj.fbind
+        for name in set(logged_names):
+            if name.startswith('on_'):
+                uid = fbind(name, self.log_event_callback, name)
+            else:
+                uid = fbind(name, self.log_property_callback, name)
+            add_uid((name, uid))
+
+    def add_trigger_logged_names(
+            self, obj: EventDispatcher, trigger_names: Iterable[str],
+            logged_names: Iterable[str]
     ):
         """logged_names cannot have events if trigger is not empty.
 
         Can't have prop bound as trigger and as name without trigger
         (causes dups in SSELogger).
 
-        :param loggable:
-        :param triggered_names:
+        :param obj:
+        :param trigger_names:
         :param logged_names:
-        :param use_default_logged_names:
-        :param use_default_logged_trigger_names:
-        :return:
         """
-        if loggable in self.logged_instances:
-            uids = self.logged_instances[loggable]
+        if obj in self.logged_instances:
+            uids = self.logged_instances[obj]
         else:
-            uids = self.logged_instances[loggable] = []
+            uids = self.logged_instances[obj] = []
         add_uid = uids.append
 
-        default_triggered_names = []
-        if use_default_logged_trigger_names:
-            default_triggered_names = loggable.logged_trigger_names
+        fbind = obj.fbind
+        # keep sorting
+        tracked_props = list({name: None for name in logged_names})
+        for name in set(trigger_names):
+            if name.startswith('on_'):
+                uid = fbind(name, self.log_trigger_event_callback, name,
+                            tracked_props)
+            else:
+                uid = fbind(name, self.log_trigger_property_callback, name,
+                            tracked_props)
+            add_uid((name, uid))
 
-        default_logged_names = []
-        if use_default_logged_names:
-            default_logged_names = loggable.logged_names
-
-        fbind = loggable.fbind
-        if not triggered_names and not default_triggered_names:
-            for name in set(chain(default_logged_names, logged_names)):
-                if name.startswith('on_'):
-                    uid = fbind(name, self.log_event_callback, name)
-                else:
-                    uid = fbind(name, self.log_property_callback, name)
-                add_uid((name, uid))
-        else:
-            tracked_props = set(chain(default_logged_names, logged_names))
-            for name in set(chain(default_triggered_names, triggered_names)):
-                if name.startswith('on_'):
-                    uid = fbind(name, self.log_trigger_event_callback, name,
-                                tracked_props)
-                else:
-                    uid = fbind(name, self.log_trigger_property_callback, name,
-                                tracked_props)
-                add_uid((name, uid))
-
-    def remove_logged_instance(self, loggable: Loggable):
-        uids = self.logged_instances.pop(loggable)
-        unbind_uid = loggable.unbind_uid
+    def remove_logged_instance(self, obj: EventDispatcher):
+        uids = self.logged_instances.pop(obj)
+        unbind_uid = obj.unbind_uid
         for name, uid in uids:
             unbind_uid(name, uid)
 
@@ -160,6 +121,78 @@ class ObjectLogger:
 
     def log_trigger_event_callback(self, name, tracked_props, obj, *args):
         raise NotImplementedError
+
+    @staticmethod
+    def get_config_from_objects(
+            objects: List[Union[MoaBase, EventDispatcher]],
+            old_config: list = None,
+            log_by_default: bool = False) -> list:
+        from pymoa.stage import MoaStage
+        old_config = old_config or []
+        ret = []
+        value = {'log': log_by_default, 'trigger': []}
+
+        for i, obj in enumerate(objects):
+            old_value = old_config[i] if i < len(old_config) else {}
+
+            old_items = old_value.get('items', {})
+            items = {name: old_items.get(name, value)
+                     for name in get_hinted_logged_names(obj)}
+
+            if isclass(obj):
+                item = {'cls': obj.__name__, 'items': items}
+            else:
+                item = {'name': obj.name, 'cls': obj.__name__, 'items': items}
+
+                if isinstance(obj, MoaStage) and obj.stages:
+                    item['stages'] = ObjectLogger.get_config_from_objects(
+                        obj.stages,
+                        old_config=old_value.get('stages', None),
+                        log_by_default=log_by_default)
+
+            ret.append(item)
+        return ret
+
+    @staticmethod
+    def dump_config(filename: str, config: list):
+        with open(filename, 'w') as fh:
+            fh.write(yaml_dumps(config))
+
+    @staticmethod
+    def load_config(filename: str) -> list:
+        with open(filename) as fh:
+            return yaml_loads(fh.read())
+
+    def start_logging_from_config(
+            self, objects: List[Union[MoaBase, EventDispatcher]],
+            config: list) -> List[MoaBase]:
+        from pymoa.stage import MoaStage
+        ret_objects = set()
+
+        for i, obj in enumerate(objects):
+            if isclass(obj):
+                raise TypeError(f'{obj}')
+
+            item = config[i] if i < len(config) else {}
+            if 'name' in item and item['name'] != obj.name:
+                raise ValueError(f'{item["name"]} != {obj.name}')
+
+            for name, value in item.get('items', {}).items():
+                if value.get('log', False):
+                    ret_objects.add(obj)
+                    trigger = value.get('trigger', [])
+
+                    if trigger:
+                        self.add_trigger_logged_names(obj, [name], trigger)
+                    else:
+                        self.add_logged_names(obj, [name])
+
+            if isinstance(obj, MoaStage) and obj.stages:
+                ret_objects.update(self.start_logging_from_config(
+                    obj.stages, item.get('stages', [])
+                ))
+
+        return list(ret_objects)
 
 
 class SimpleCSVLogger(ObjectLogger):

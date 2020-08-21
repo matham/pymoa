@@ -1,38 +1,25 @@
 from pymoa.stage import MoaStage
 from pymoa.stage.delay import Delay, UniformRandomDelay
 from pymoa.stage.gate import DigitalGateStage
-from pymoa.device.digital import DigitalChannel
+from pymoa.device.digital import RandomDigitalChannel
 from pymoa.data_logger import SimpleTerminalLogger
-from pymoa.executor import apply_executor
-from pymoa.executor.threading import ThreadExecutor
+from kivy_trio.context import kivy_trio_context_manager
 import trio
-import random
-from time import perf_counter
 
 
-class VirtualDevice(DigitalChannel):
+class GroupStage(MoaStage):
 
-    def executor_callback(self, return_value):
-        self.state, self.timestamp = return_value
-        self.dispatch('on_data_update', self)
-
-    @apply_executor(callback=executor_callback)
-    def write_state(self, state: bool, **kwargs):
-        return state, perf_counter()
-
-    async def pump_state(self):
-        while True:
-            await trio.sleep(random.random() * 10 + 1)
-            await self.write_state(random.random() >= 0.5)
+    async def do_trial(self):
+        pass
 
 
 class SugarPalletStage(MoaStage):
 
-    motor_device: VirtualDevice = None
+    motor_device: RandomDigitalChannel = None
 
-    def __init__(self, motor_device, **kwargs):
+    def __init__(self, device, **kwargs):
         super(SugarPalletStage, self).__init__(**kwargs)
-        self.motor_device = motor_device
+        self.motor_device = device
 
     async def do_trial(self):
         await self.motor_device.write_state(True)
@@ -40,12 +27,11 @@ class SugarPalletStage(MoaStage):
         await self.motor_device.write_state(False)
 
 
-executor = ThreadExecutor()
-photo_bream_device = VirtualDevice(name='photobeam_device', executor=executor)
-motor_device = VirtualDevice(name='motor_device', executor=executor)
+photo_bream_device = RandomDigitalChannel(name='photobeam_device')
+motor_device = RandomDigitalChannel(name='motor_device')
 
-root = MoaStage(name='Root stage')
-trial = MoaStage(name='Trial', repeat=2)
+root = GroupStage(name='Root stage')
+trial = GroupStage(name='Trial', repeat=2)
 
 root.add_stage(Delay(delay=20, name='Habituation'))
 root.add_stage(trial)
@@ -54,31 +40,32 @@ root.add_stage(Delay(delay=15, name='post delay'))
 trial.add_stage(DigitalGateStage(
     device=photo_bream_device, exit_state=True, name='photobeam_stage'))
 trial.add_stage(SugarPalletStage(
-    motor_device=motor_device, name='sugar pallet stage'))
+    device=motor_device, name='sugar pallet stage'))
 trial.add_stage(UniformRandomDelay(min=20, max=40, name='ITI'))
 
 
 logger = SimpleTerminalLogger(separator=',')
 for stage in root.iterate_stages():
-    logger.add_logged_instance(stage)
+    logger.add_trigger_logged_names(
+        stage, trigger_names=[
+            'on_stage_start', 'on_trial_start', 'on_trial_end',
+            'on_stage_end'],
+        logged_names=['count']
+    )
 
 
 async def run_experiment():
-    # start the threading executor
-    await executor.start_executor()
-    async with trio.open_nursery() as nursery:
-        async def run_root_stage():
-            # run the experiment stages, but when done also cancel reading the
-            # devices
-            await root.run_stage()
-            nursery.cancel_scope.cancel()
+    with kivy_trio_context_manager():
+        async with trio.open_nursery() as nursery:
+            async def run_root_stage():
+                # run the experiment stages, but when done also cancel reading
+                # the devices
+                await root.run_stage()
+                nursery.cancel_scope.cancel()
 
-        # reads the photobeam device continuously
-        nursery.start_soon(photo_bream_device.pump_state)
-        # runs the experiment stages
-        nursery.start_soon(run_root_stage)
-
-    # we're done so we can stop the threading executor
-    await executor.stop_executor()
+            # reads the photobeam device continuously
+            nursery.start_soon(photo_bream_device.pump_state, 1000)
+            # runs the experiment stages
+            nursery.start_soon(run_root_stage)
 
 trio.run(run_experiment)

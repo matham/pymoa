@@ -31,7 +31,8 @@ setup(
         'Programming Language :: Python :: 3.8',
     ],
     packages=find_packages(),
-    install_requires=['kivy', 'trio', 'pymoa_remote'],
+    install_requires=[
+        'kivy', 'trio', 'pymoa_remote', 'kivy_trio', 'tree_config'],
     extras_require={
         'dev': [
             'pytest>=3.6', 'pytest-cov', 'flake8', 'sphinx-rtd-theme',

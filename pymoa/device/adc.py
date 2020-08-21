@@ -3,13 +3,12 @@
 
 ADC implementation of :class:`~pymoa.device.Device`.
 """
-
-from time import perf_counter, sleep
+import trio
+from time import perf_counter
 
 from kivy.properties import ObjectProperty
 
 from pymoa.device import Device
-from pymoa.executor import apply_generator_executor
 
 __all__ = ('ADCPort', 'VirtualADCPort')
 
@@ -22,11 +21,11 @@ class ADCPort(Device):
     bundle multiple channels in one instance if they are sampled synchronously.
     """
 
+    _logged_names_hint_ = ('timestamp', 'raw_data', 'data', 'ts_idx')
+
     _config_props_ = (
         'frequency', 'offset', 'scale', 'bit_depth', 'num_channels',
         'active_channels')
-
-    _logged_names_ = ('timestamp', 'raw_data', 'data', 'ts_idx')
 
     timestamp = ObjectProperty(0, allownone=True)
     '''The timestamp of the last update to the :attr:`raw_data`, and
@@ -90,7 +89,7 @@ class ADCPort(Device):
     defaults to None.
     '''
 
-    active_channels = ObjectProperty(None)
+    active_channels = None
     '''A list of booleans with length :attr:`num_channels` indicating whether
     each corresponding channel is active. Inactive channels are ones that don't
     get data.
@@ -99,14 +98,14 @@ class ADCPort(Device):
     and defaults to None.
     '''
 
-    num_channels = ObjectProperty(1)
+    num_channels = 1
     '''The number of channels in the ADC.
 
     :attr:`num_channels` is a :class:`~kivy.properties.NumericProperty`
     and defaults to 1.
     '''
 
-    bit_depth = ObjectProperty(0)
+    bit_depth = 0
     '''The number of bits of :attr:`raw_data` data points. If zero, only
     :attr:`data` is populated.
 
@@ -114,26 +113,37 @@ class ADCPort(Device):
     and defaults to 0.
     '''
 
-    scale = ObjectProperty(1.)
+    scale = 1.
     '''The scale when converting :attr:`raw_data` to :attr:`data`.
 
     :attr:`scale` is a :class:`~kivy.properties.NumericProperty`
     and defaults to 1.0.
     '''
 
-    offset = ObjectProperty(0)
+    offset = 0
     '''The offset when converting :attr:`raw_data` to :attr:`data`.
 
     :attr:`offset` is a :class:`~kivy.properties.NumericProperty`
     and defaults to 0.0.
     '''
 
-    frequency = ObjectProperty(0)
+    frequency = 0
     '''The frequency at which each ADC channel is sampled.
 
     :attr:`frequency` is a :class:`~kivy.properties.NumericProperty`
     and defaults to 0.0.
     '''
+
+    def __init__(
+            self, active_channels=None, num_channels=1, bit_depth=0, scale=1.,
+            offset=0, frequency=0, **kwargs):
+        super().__init__(**kwargs)
+        self.active_channels = active_channels
+        self.num_channels = num_channels
+        self.bit_depth = bit_depth
+        self.scale = scale
+        self.offset = offset
+        self.frequency = frequency
 
 
 class VirtualADCPort(ADCPort):
@@ -195,12 +205,7 @@ data_size=2, frequency=4, bit_depth=16)
     defaults to 0.
     '''
 
-    def executor_callback(self, return_value):
-        self.timestamp, self.ts_idx, self.raw_data, self.data = return_value
-        self.dispatch('on_data_update', self)
-
-    @apply_generator_executor(callback=executor_callback)
-    def generate_data(self, data_size):
+    async def pump_state(self, data_size):
         sleep_time = data_size / (self.frequency * 4)
         n = self.num_channels
         chs = self.active_channels
@@ -218,7 +223,7 @@ data_size=2, frequency=4, bit_depth=16)
                 t = perf_counter()
                 # ensure it's time to generate data_size of data again
                 if int((t - start_time) * freq) - sample < data_size:
-                    sleep(sleep_time)
+                    await trio.sleep(sleep_time)
                     continue
 
             raw_data = data = [
@@ -232,7 +237,11 @@ data_size=2, frequency=4, bit_depth=16)
                     for d in data]
 
             sample += data_size
-            yield t, [0, ] * n, raw_data, data
+            self.timestamp = t
+            self.ts_idx = [0, ] * n
+            self.raw_data = raw_data
+            self.data = data
+            self.dispatch('on_data_update', self)
 
     def data_func(self, sample, channel):
         """A callback that we call when we need a new data point. The callback
@@ -250,8 +259,3 @@ data_size=2, frequency=4, bit_depth=16)
         :return:
         """
         return 0
-
-    async def pump_state(self, data_size):
-        async with self.generate_data(data_size) as aiter:
-            async for item in aiter:
-                pass

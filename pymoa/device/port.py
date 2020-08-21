@@ -42,7 +42,7 @@ class ChannelBase(Device):
     devices.
     """
 
-    _logged_names_ = ('timestamp', )
+    _logged_names_hint_ = ('timestamp', )
 
     timestamp: float = ObjectProperty(0, allownone=True)
     '''The time stamp of the last update to the channel.
@@ -163,8 +163,6 @@ class Port(ChannelBase):
         >>> port.deactivate(port)
         True
     """
-
-    _config_props_ = ('channel_names', )
 
     channel_names: List[str] = []
     '''List of name of the channels of the port.

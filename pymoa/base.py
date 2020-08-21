@@ -11,6 +11,8 @@ class MoaBase:
 
     """
 
+    _config_props_ = ('name', )
+
     name: str = ''
 
     def __init__(self, name='', **kwargs):

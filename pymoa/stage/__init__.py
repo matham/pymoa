@@ -12,16 +12,15 @@ from typing import List, Tuple, Dict, Optional
 import trio
 import math
 
-from kivy.properties import (
-    BooleanProperty, NumericProperty, OptionProperty, BoundedNumericProperty,
-    ObjectProperty, ListProperty)
+from kivy.properties import BooleanProperty, BoundedNumericProperty
+from kivy.event import EventDispatcher
 
-from pymoa.data_logger import Loggable
+from pymoa.base import MoaBase
 
 __all__ = ('MoaStage', )
 
 
-class MoaStage(Loggable):
+class MoaStage(EventDispatcher, MoaBase):
     """Base stage for structuring an experiment.
 
     """
@@ -29,13 +28,30 @@ class MoaStage(Loggable):
     __events__ = (
         'on_stage_start', 'on_trial_start', 'on_trial_end', 'on_stage_end')
 
-    _logged_trigger_names_ = __events__
+    _logged_names_hint_ = __events__ + ('count', 'active')
 
-    _logged_names_ = ('count', )
+    _config_props_ = (
+        'disabled', 'complete_on', 'order', 'max_trial_duration',
+        'max_duration', 'repeat')
 
     __trial_cancel_scope = None
 
     __stage_cancel_scope = None
+
+    def __init__(
+            self, repeat=1, max_duration=0., max_trial_duration=0.,
+            order='serial', complete_on='all', complete_on_whom=(),
+            disabled=False,
+            **kwargs):
+        super().__init__(**kwargs)
+        self.stages = []
+        self.complete_on_whom = list(complete_on_whom)
+        self.repeat = repeat
+        self.max_duration = max_duration
+        self.max_trial_duration = max_trial_duration
+        self.order = order
+        self.complete_on = complete_on
+        self.disabled = disabled
 
     def add_stage(
             self, stage: 'MoaStage', index: Optional[int] = None, **kwargs):
@@ -46,8 +62,9 @@ class MoaStage(Loggable):
             raise Exception(
                 f'{stage} is not an instance of MoaStage and cannot be '
                 f'added to stages')
+
         parent = stage.parent
-        # check if widget is already a child of another widget
+        # check if stage is already a child of another stage
         if parent:
             raise Exception(
                 f'Cannot add {stage}, it already has a parent {parent}')
@@ -56,50 +73,56 @@ class MoaStage(Loggable):
         if index is None or index >= len(stages):
             stages.append(stage)
         else:
-            stages.insert(stage, index)
+            stages.insert(index, stage)
 
     def remove_stage(self, stage: 'MoaStage', **kwargs):
         if stage.parent is not self:
             raise ValueError(f'{stage} is not a child stage of {self}.')
 
-        try:
-            self.stages.remove(stage)
-            stage.parent = None
-        except ValueError:
-            pass
+        self.stages.remove(stage)
+        stage.parent = None
 
     async def _do_stage_trial(
             self, i, stages, complete_on, complete_on_whom, serial):
         complete_on_whom = complete_on_whom.copy()
         max_trial_duration = self.max_trial_duration
+        currently_running = 0
 
-        def handle_done(completed_stage):
-            # if there are no more stages, no need to cancel
+        def handle_done(completed_stage: MoaStage) -> bool:
+            nonlocal currently_running
+            currently_running -= 1
+            # if this doesn't affect cancellation, no need to cancel
             if completed_stage not in complete_on_whom:
-                return
+                return False
 
             if complete_on == 'all':
                 complete_on_whom.remove(completed_stage)
                 if complete_on_whom:
-                    return
-            trial_scope.cancel_scope.cancel()
+                    return False
+
+            assert currently_running >= 0
+            if currently_running:
+                # only manually cancel if there are others running
+                trial_scope.cancel_scope.cancel()
+            return True
 
         async def start_trial_and_signal(
                 trial_num, task_status=trio.TASK_STATUS_IGNORED):
-            self.dispatch('on_trial_start', self, trial_num)
             await self.init_trial(trial_num)
             task_status.started()
+
+            # todo: document that it is dispatched **after** init
+            self.dispatch('on_trial_start', self, trial_num)
+
             await self.do_trial()
             handle_done(self)
 
-        async def run_children_serially():
-            for child_stage in stages:
-                if not child_stage.stage_is_skipped:
-                    await child_stage.run_stage()
-                handle_done(child_stage)
-
         async def start_child_stage(
                 child_stage, task_status=trio.TASK_STATUS_IGNORED):
+            # if we're done because a previously started stage finished and the
+            # stage is done, check to see if we're canceled before starting
+            await trio.lowlevel.checkpoint()
+
             await child_stage.run_stage(task_status=task_status)
             handle_done(child_stage)
 
@@ -110,20 +133,34 @@ class MoaStage(Loggable):
                     trial_scope.cancel_scope.deadline = \
                         trio.current_time() + max_trial_duration
 
+                currently_running += 1
                 await trial_scope.start(start_trial_and_signal, i)
 
                 if serial:
-                    trial_scope.start_soon(run_children_serially)
-                else:
+                    # do children sequentially
                     for stage in stages:
+                        currently_running += 1
                         if not stage.stage_is_skipped:
-                            await trial_scope.start(
-                                start_child_stage, stage)
+                            await stage.run_stage()
+                        # don't schedule more stuff if we're done
+                        if handle_done(stage):
+                            return
+                else:
+                    # start the children one of the other, but only wait for
+                    # the stage to init before starting the next. So all
+                    # children will run parallel once init
+                    for stage in stages:
+                        currently_running += 1
+                        if not stage.stage_is_skipped:
+                            await trial_scope.start(start_child_stage, stage)
                         else:
-                            handle_done(stage)
+                            if handle_done(stage):
+                                # don't schedule more stuff if we're done
+                                return
         finally:
             self.__trial_cancel_scope = None
 
+        # todo: make sure this value is correct when it timed out
         return trial_scope.cancel_scope.cancelled_caught
 
     async def _do_stage_trials(self):
@@ -143,18 +180,20 @@ class MoaStage(Loggable):
                 canceled = await self._do_stage_trial(
                     i, stages, complete_on, complete_on_whom, serial)
             except Exception:
-                await self.trial_done(interrupted=True)
-                self.dispatch('on_trial_end', self, i)
+                with trio.CancelScope(shield=True):
+                    await self.trial_done(exception=True)
+                    # todo: document that it is dispatched **after** done
+                    self.dispatch('on_trial_end', self, i)
                 raise
             except trio.Cancelled:
-                with trio.move_on_at(math.inf) as cleanup_scope:
-                    cleanup_scope.shield = True
-                    await self.trial_done(interrupted=True)
+                # if we get Cancelled, that means this stage wasn't canceled,
+                # but rather some stage above us was canceled so we canceled
+                with trio.CancelScope(shield=True):
+                    await self.trial_done(exception=True)
                     self.dispatch('on_trial_end', self, i)
                 raise
 
-            with trio.move_on_at(math.inf) as cleanup_scope:
-                cleanup_scope.shield = True
+            with trio.CancelScope(shield=True):
                 await self.trial_done(canceled=canceled)
                 self.dispatch('on_trial_end', self, i)
 
@@ -172,53 +211,68 @@ class MoaStage(Loggable):
                 if max_duration:
                     stage_scope.deadline = trio.current_time() + max_duration
 
-                self.dispatch('on_stage_start', self)
                 await self.init_stage()
                 task_status.started()
+
+                # todo: document that it is dispatched **after** init
+                self.dispatch('on_stage_start', self)
 
                 await self._do_stage_trials()
         except Exception:
             normal_exit = False
-            await self.stage_done(interrupted=True)
-            self.dispatch('on_stage_end', self)
+            with trio.CancelScope(shield=True):
+                await self.stage_done(exception=True)
+                self.dispatch('on_stage_end', self)
             raise
         except trio.Cancelled:
+            # if we get Cancelled, that means this stage wasn't canceled, but
+            # rather some stage above us was canceled so we also got canceled
             normal_exit = False
-            with trio.move_on_at(math.inf) as cleanup_scope:
-                cleanup_scope.shield = True
-                await self.stage_done(interrupted=True)
+            with trio.CancelScope(shield=True):
+                await self.stage_done(exception=True)
+                # todo: document that it is dispatched **after** done
                 self.dispatch('on_stage_end', self)
             raise
         finally:
             self.__stage_cancel_scope = None
             if not normal_exit:
+                # won't be able to set it later
                 self.active = False
 
         try:
-            with trio.move_on_at(math.inf) as cleanup_scope:
-                cleanup_scope.shield = True
+            with trio.CancelScope(shield=True):
                 await self.stage_done(canceled=stage_scope.cancelled_caught)
                 self.dispatch('on_stage_end', self)
         finally:
             self.active = False
 
     async def init_stage(self):
+        """Should take minimal time and must be called with ``super``.
+        """
         self.count = 0
 
     async def init_trial(self, i: int):
+        """Should take minimal time and must be called with ``super``.
+        """
         self.count = i
 
     async def do_trial(self):
+        raise NotImplementedError
+
+    async def trial_done(self, exception=False, canceled=False):
+        """Canceled means that cancel was called for this specific stage and
+        trial, or it timed out, or the complete_on_whom caused it to exit.
+
+        Called under a shielded cancel scope.
+        """
         pass
 
-    async def trial_done(self, interrupted=False, canceled=False):
-        """Canceled means that cancel was called for the trial, and the
-        trial definitely ended early. """
-        pass
+    async def stage_done(self, exception=False, canceled=False):
+        """Canceled means that cancel was called for this specific stage
+        and it ended early.
 
-    async def stage_done(self, interrupted=False, canceled=False):
-        """Canceled means that cancel was called for the trial, and the
-        trial definitely ended early. """
+        Called under a shielded cancel scope.
+        """
         pass
 
     def stop_stage(self):
@@ -226,28 +280,26 @@ class MoaStage(Loggable):
             self.__stage_cancel_scope.cancel()
 
     def stop_trial(self):
+        """Continues the next trial.
+        """
         if self.__trial_cancel_scope is not None:
             self.__trial_cancel_scope.cancel_scope.cancel()
 
     @property
     def stage_is_skipped(self):
-        """ If True, when step_stage is called, it must continue the chain,
-        even if not actually started. It is important, that this method does
-        not modify the state. I.e. calling this method twice in series
-        should return the same value.
-        """
         return self.disabled
 
     def __repr__(self):
         active = 'active' if self.active else 'inactive'
+        name = self.name or 'unnamed'
         parent_name = ''
         if self.parent:
             parent_name = self.parent.name or 'unnamed'
         cls = self.__class__
         cls_name = cls.__module__ + '.' + cls.__qualname__
 
-        return f'<{cls_name} name="{self.name}": {self.count}/{self.repeat} ' \
-               f'parent="{parent_name}" {active}>'
+        return f'<{cls_name} name="{name}": {self.count}/{self.repeat} ' \
+               f'parent="{parent_name}" {active} at 0x{id(self):016X}>'
 
     def on_stage_start(self, *largs):
         pass
@@ -267,7 +319,7 @@ class MoaStage(Loggable):
             for child in stage.iterate_stages():
                 yield child
 
-    stages: List['MoaStage'] = ListProperty([])
+    stages: List['MoaStage'] = []
     '''A list of children :class:`MoaStage` instance. When a stage is started,
     it's children stages are also started with the exact details depending on
     the :attr:`order`.
@@ -278,7 +330,7 @@ class MoaStage(Loggable):
     It is read only. To modify, call :meth:`add_stage` or :meth:`remove_stage`.
     '''
 
-    parent: 'MoaStage' = ObjectProperty(None, allownone=True)
+    parent: 'MoaStage' = None
     '''Parent of this widget.
 
     :attr:`parent` is an :class:`~kivy.properties.ObjectProperty` and
@@ -288,7 +340,7 @@ class MoaStage(Loggable):
     and unset when the widget is removed from its parent.
     '''
 
-    repeat: int = BoundedNumericProperty(1, min=-1)
+    repeat: int = 1
     ''' 1 is once, -1 is indefinitely.
     '''
 
@@ -296,29 +348,32 @@ class MoaStage(Loggable):
     ''' Zero is the first etc. updated after the loop jumps back. read only
     '''
 
-    max_duration: float = BoundedNumericProperty(0, min=0)
+    max_duration: float = 0
     '''If non zero, the total duration that this stage goes on. Including
-    the loops.
+    the loops and stage initialization, excluding :meth:`stage_done`.
     '''
 
-    max_trial_duration: float = BoundedNumericProperty(0, min=0)
+    max_trial_duration: float = 0
+    '''If non zero, the total duration that each trial goes on. Including
+    the trial initialization but excluding :meth:`trial_done`.
+    '''
 
-    order: str = OptionProperty('serial', options=['serial', 'parallel'])
+    order: str = 'serial'
     '''Whether sub-stages are run at same time or one after the other.
     '''
 
-    complete_on: str = OptionProperty('all', options=['all', 'any'])
+    complete_on: str = 'all'
     ''' If parallel, whether it completes when any or all of its sub-stages
     are done. Can be `all`, `any`, or a list-type of child and self.
     '''
 
-    complete_on_whom: List['MoaStage'] = ListProperty([])
+    complete_on_whom: List['MoaStage'] = []
     ''' If parallel, whether it completes when any or all of its sub-stages
     are done. Can be `all`, `any`, or a list-type of child and self.
     '''
 
     active: bool = BooleanProperty(False)
 
-    disabled: bool = BooleanProperty(False)
+    disabled: bool = False
     ''' If this stage is disabled.
     '''

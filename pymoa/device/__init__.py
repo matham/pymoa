@@ -3,13 +3,14 @@
 
 Device module for interfacing Moa with devices (e.g switches, ADC, etc.).
 """
+from kivy.event import EventDispatcher
 
-from pymoa.executor.remote import RemoteReferenceable
+from pymoa.base import MoaBase
 
 __all__ = ('Device', )
 
 
-class Device(RemoteReferenceable):
+class Device(MoaBase, EventDispatcher):
     """The base class for all devices interfacing with Moa.
 
     :Events:
@@ -29,12 +30,7 @@ class Device(RemoteReferenceable):
 
     __events__ = ('on_data_update', )
 
-    _logged_trigger_names_ = ('on_data_update', )
+    _logged_names_hint_ = ('on_data_update', )
 
     def on_data_update(self, instance):
         pass
-
-    def __repr__(self):
-        cls = self.__class__
-        cls_name = cls.__module__ + '.' + cls.__qualname__
-        return f'<{cls_name} name="{self.name}">'

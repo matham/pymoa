@@ -13,7 +13,6 @@ from typing import Dict
 from kivy.properties import ObjectProperty
 
 from pymoa.device.port import Channel, Port
-from pymoa.executor import apply_executor, apply_generator_executor
 
 __all__ = (
     'AnalogChannel', 'AnalogPort', 'RandomAnalogChannel', 'RandomAnalogPort')
@@ -23,7 +22,7 @@ class AnalogChannel(Channel):
     """A abstract single channel analog device.
     """
 
-    _logged_names_ = ('state', )
+    _logged_names_hint_ = ('state', )
 
     state = ObjectProperty(None, allownone=True)
     '''The state of the channel.
@@ -79,33 +78,21 @@ class RandomAnalogChannel(AnalogChannel):
     testing device.
     """
 
-    def executor_callback(self, return_value):
-        self.state, self.timestamp = return_value
+    async def read_state(self):
+        self.state = random.random()
+        self.timestamp = time.perf_counter()
         self.dispatch('on_data_update', self)
 
-    @apply_executor(callback=executor_callback)
-    def get_state_value(self):
-        return random.random(), time.perf_counter()
-
-    @apply_executor(callback=executor_callback)
-    def set_state_value(self, state):
-        return state, time.perf_counter()
-
-    async def read_state(self):
-        await self.get_state_value()
-
     async def write_state(self, state: float, **kwargs):
-        await self.set_state_value(state)
+        self.state = state
+        self.timestamp = time.perf_counter()
+        self.dispatch('on_data_update', self)
 
-    @apply_generator_executor(callback=executor_callback)
-    def generate_data(self, num_samples):
-        for _ in range(num_samples):
-            yield random.random(), time.perf_counter()
-
-    async def pump_state(self, num_samples):
-        async with self.generate_data(num_samples) as aiter:
-            async for item in aiter:
-                pass
+    async def pump_state(self, num_samples, delay=1.):
+        for i in range(num_samples):
+            if i:
+                await trio.sleep(delay)
+            await self.read_state()
 
 
 class RandomAnalogPort(AnalogPort):
@@ -113,42 +100,20 @@ class RandomAnalogPort(AnalogPort):
     testing device.
     """
 
-    _logged_names_ = ('chan0', 'chan1')
-
-    channel_names = ['chan0', 'chan1']
-
-    chan0: float = ObjectProperty(None, allownone=True)
-
-    chan1: float = ObjectProperty(None, allownone=True)
-
-    def executor_callback(self, return_value):
-        values, self.timestamp = return_value
-        for name, value in zip(self.channel_names, values):
-            setattr(self, name, value)
+    async def read_state(self):
+        for name in self.channel_names:
+            setattr(self, name, random.random())
+        self.timestamp = time.perf_counter()
         self.dispatch('on_data_update', self)
 
-    @apply_executor(callback=executor_callback)
-    def get_channels_value(self):
-        return [random.random() for _ in self.channel_names], \
-               time.perf_counter()
-
-    @apply_executor(callback=executor_callback)
-    def set_channels_value(self, values):
-        return values, time.perf_counter()
-
-    async def read_state(self):
-        await self.get_channels_value()
-
     async def write_states(self, **kwargs: Dict[str, float]):
-        await self.set_channels_value(kwargs)
+        for name, value in kwargs.items():
+            setattr(self, name, value)
+        self.timestamp = time.perf_counter()
+        self.dispatch('on_data_update', self)
 
-    @apply_generator_executor(callback=executor_callback)
-    def generate_data(self, num_samples):
-        for _ in range(num_samples):
-            yield [random.random() for _ in self.channel_names], \
-                time.perf_counter()
-
-    async def pump_state(self, num_samples):
-        async with self.generate_data(num_samples) as aiter:
-            async for item in aiter:
-                pass
+    async def pump_state(self, num_samples, delay=1.):
+        for i in range(num_samples):
+            if i:
+                await trio.sleep(delay)
+            await self.read_state()
