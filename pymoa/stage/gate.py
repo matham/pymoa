@@ -15,6 +15,13 @@ __all__ = ('GateStage', 'DigitalGateStage', 'AnalogGateStage')
 
 class GateStage(MoaStage):
     """Stage that waits until a device reaches some state.
+
+    This stage waits for updates on the device state and responds accordingly.
+    If the device is executing remotely, state updates may have some delay.
+    Since :attr:`hold_time` is computed using the local clock and not
+    :attr:`~pymoa.device.Device.timestamp`, this adds further latency. To wait
+    for a device more precisely, use a custom stage that waits on the device
+    remotely.
     """
 
     _config_props_ = (

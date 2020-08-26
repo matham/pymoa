@@ -39,9 +39,9 @@ class UniformRandomDelay(Delay):
         self.min = min
         self.max = max
 
-    async def do_trial(self):
+    async def init_trial(self, i: int):
         self.delay = random.uniform(self.min, self.max)
-        await super(UniformRandomDelay, self).do_trial()
+        await super().init_trial(i)
 
     min: float = 0.
 
@@ -59,9 +59,9 @@ class GaussianRandomDelay(Delay):
         self.mu = mu
         self.sigma = sigma
 
-    async def do_trial(self):
+    async def init_trial(self, i: int):
         self.delay = max(0., random.gauss(self.mu, self.sigma))
-        await super(GaussianRandomDelay, self).do_trial()
+        await super().init_trial(i)
 
     mu: float = 1.
 
