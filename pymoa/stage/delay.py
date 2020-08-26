@@ -3,8 +3,6 @@
 """
 import random
 
-from kivy.properties import BoundedNumericProperty
-
 from pymoa.stage import MoaStage
 import trio
 
@@ -18,8 +16,6 @@ class Delay(MoaStage):
 
     _config_props_ = ('delay', )
 
-    _logged_names_hint_ = ('delay', )
-
     def __init__(self, delay=0.5, **kwargs):
         super().__init__(**kwargs)
         self.delay = delay
@@ -27,7 +23,7 @@ class Delay(MoaStage):
     async def do_trial(self):
         await trio.sleep(self.delay)
 
-    delay: float = BoundedNumericProperty(0.5, min=0.)
+    delay: float = 0.5
     '''How long the stage should delay for each trial.
     '''
 

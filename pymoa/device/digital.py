@@ -9,8 +9,6 @@ import trio
 import time
 from typing import Optional, Iterable, Dict
 
-from kivy.properties import ObjectProperty
-
 from pymoa.device.port import Channel, Port
 
 __all__ = (
@@ -22,9 +20,7 @@ class DigitalChannel(Channel):
     """A abstract single channel digital device.
     """
 
-    _logged_names_hint_ = ('state', )
-
-    state: Optional[bool] = ObjectProperty(None, allownone=True)
+    state: Optional[bool] = None
     '''The state of the channel.
 
     :attr:`state` is a :class:`~kivy.properties.BooleanProperty` and

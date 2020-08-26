@@ -32,5 +32,13 @@ class Device(MoaBase, EventDispatcher):
 
     _logged_names_hint_ = ('on_data_update', )
 
+    timestamp: float = 0
+    '''The time stamp of the last update to the device.
+
+    .. warning::
+        The :attr:`timestamp` may be derived from a device clock different than
+        the local clock. One needs to be aware of the timestamp source.
+    '''
+
     def on_data_update(self, instance):
         pass

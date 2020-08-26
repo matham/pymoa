@@ -12,7 +12,7 @@ from typing import List, Tuple, Dict, Optional
 import trio
 import math
 
-from kivy.properties import BooleanProperty, BoundedNumericProperty
+from kivy.properties import BooleanProperty
 from kivy.event import EventDispatcher
 
 from pymoa.base import MoaBase
@@ -28,7 +28,7 @@ class MoaStage(EventDispatcher, MoaBase):
     __events__ = (
         'on_stage_start', 'on_trial_start', 'on_trial_end', 'on_stage_end')
 
-    _logged_names_hint_ = __events__ + ('count', 'active')
+    _logged_names_hint_ = __events__ + ('active', )
 
     _config_props_ = (
         'disabled', 'complete_on', 'order', 'max_trial_duration',
@@ -344,7 +344,7 @@ class MoaStage(EventDispatcher, MoaBase):
     ''' 1 is once, -1 is indefinitely.
     '''
 
-    count: int = BoundedNumericProperty(-1, min=-1)
+    count: int = -1
     ''' Zero is the first etc. updated after the loop jumps back. read only
     '''
 

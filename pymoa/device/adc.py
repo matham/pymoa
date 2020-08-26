@@ -6,8 +6,6 @@ ADC implementation of :class:`~pymoa.device.Device`.
 import trio
 from time import perf_counter
 
-from kivy.properties import ObjectProperty
-
 from pymoa.device import Device
 
 __all__ = ('ADCPort', 'VirtualADCPort')
@@ -21,30 +19,11 @@ class ADCPort(Device):
     bundle multiple channels in one instance if they are sampled synchronously.
     """
 
-    _logged_names_hint_ = ('timestamp', 'raw_data', 'data', 'ts_idx')
-
     _config_props_ = (
         'frequency', 'offset', 'scale', 'bit_depth', 'num_channels',
         'active_channels')
 
-    timestamp = ObjectProperty(0, allownone=True)
-    '''The timestamp of the last update to the :attr:`raw_data`, and
-    :attr:`data` attributes.
-
-    Typically, the rule is that :attr:`timestamp` and :attr:`ts_idx` are
-    updated before any of the `data` attributes ensuring that when
-    responding to a data update, :attr:`timestamp` is accurate.
-    The `on_data_update` event is fired after all the relevant channel data
-    has been updated.
-
-    :attr:`timestamp` is a :class:`~kivy.properties.NumericProperty` and
-    defaults to 0.
-
-    .. note::
-        Typically, when activating, the :attr:`timestamp` is not updated.
-    '''
-
-    raw_data = ObjectProperty(None)
+    raw_data = None
     '''A list of length :attr:`num_channels` containing the raw data for each
     channel. The structure is similar to :attr:`data`.
 
@@ -63,7 +42,7 @@ class ADCPort(Device):
     defaults to None.
     '''
 
-    data = ObjectProperty(None)
+    data = None
     '''A list of length :attr:`num_channels` containing the properly rescaled
     floating point data for each channel.
 
@@ -77,7 +56,7 @@ class ADCPort(Device):
     defaults to None.
     '''
 
-    ts_idx = ObjectProperty(None)
+    ts_idx = None
     '''A list of length :attr:`num_channels`, where each element in the list
     indicates the index in :attr:`data` and :attr:`raw_data` that is
     timestamped by :attr:`timestamp`. The :attr:`timestamp` is the time of

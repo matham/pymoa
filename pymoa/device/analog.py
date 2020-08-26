@@ -10,8 +10,6 @@ import trio
 import time
 from typing import Dict
 
-from kivy.properties import ObjectProperty
-
 from pymoa.device.port import Channel, Port
 
 __all__ = (
@@ -22,9 +20,7 @@ class AnalogChannel(Channel):
     """A abstract single channel analog device.
     """
 
-    _logged_names_hint_ = ('state', )
-
-    state = ObjectProperty(None, allownone=True)
+    state = None
     '''The state of the channel.
 
     :attr:`state` is a :class:`~kivy.properties.NumericProperty` and

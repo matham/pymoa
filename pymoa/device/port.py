@@ -42,24 +42,6 @@ class ChannelBase(Device):
     devices.
     """
 
-    _logged_names_hint_ = ('timestamp', )
-
-    timestamp: float = ObjectProperty(0, allownone=True)
-    '''The time stamp of the last update to the channel.
-
-    Typically, the rule is that :attr:`timestamp` is updated before any of the
-    attributes which are timed by :attr:`timestamp` is updated. It ensures
-    that when responding to a attribute change, :attr:`timestamp` is accurate.
-    The `on_data_update` event is fired after the complete data update.
-
-    .. note::
-        Typically, when activating, the :attr:`timestamp` is not updated.
-
-    .. warning::
-        The :attr:`timestamp` may be derived from a device clock different than
-        e.g. the Moa clock. One needs to be aware of the timestamp source.
-    '''
-
     async def write_state(self, **kwargs):
         """A abstract method for setting the state. See :class:`ChannelBase`
         for details.
