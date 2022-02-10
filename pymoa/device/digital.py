@@ -106,7 +106,7 @@ class RandomDigitalPort(DigitalPort):
         self.timestamp = time.perf_counter()
         self.dispatch('on_data_update', self)
 
-    async def write_states(self, **kwargs: Dict[str, bool]):
+    async def write_states(self, **kwargs: bool):
         for name, value in kwargs.items():
             setattr(self, name, value)
         self.timestamp = time.perf_counter()

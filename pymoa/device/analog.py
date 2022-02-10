@@ -46,7 +46,7 @@ class AnalogPort(Port):
     """A abstract multi-channel analog device.
     """
 
-    async def write_states(self, **kwargs: Dict[str, float]):
+    async def write_states(self, **kwargs: float):
         '''A stub method defining the prototype for :meth:`write_state` of
         derived classes.
 
@@ -102,7 +102,7 @@ class RandomAnalogPort(AnalogPort):
         self.timestamp = time.perf_counter()
         self.dispatch('on_data_update', self)
 
-    async def write_states(self, **kwargs: Dict[str, float]):
+    async def write_states(self, **kwargs: float):
         for name, value in kwargs.items():
             setattr(self, name, value)
         self.timestamp = time.perf_counter()
