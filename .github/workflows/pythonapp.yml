@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   lint_test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4.2.2
     - name: Set up Python 3.7
@@ -20,7 +20,7 @@ jobs:
         python3 -m flake8 . --count --ignore=E125,E126,E127,E128,E402,E741,E731,W503,F401,W504,F841 --show-source --statistics --max-line-length=80 --exclude=__pycache__,.tox,.git/,doc/
 
   linux_test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4.2.2
     - name: Set up Python 3.x
@@ -76,7 +76,7 @@ jobs:
         python -m pytest --cov=pymoa --cov-report term --cov-branch pymoa/tests
 
   docs:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4.2.2
     - name: Set up Python 3.x
