@@ -36,7 +36,9 @@ setup(
     extras_require={
         'dev': [
             'pytest>=3.6', 'pytest-cov', 'flake8', 'sphinx-rtd-theme',
-            'coveralls', 'pytest-trio', 'sphinxcontrib-trio'],
+            'coveralls', 'pytest-trio', 'sphinxcontrib-trio', 'setuptools',
+            'sphinx',
+        ],
     },
     package_data={
         'pymoa':
